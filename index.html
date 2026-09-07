@@ -60,11 +60,11 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
 </div>
 
 <div class="card">
-  <div class="notice" id="notice">Press ROLL to generate 6 random letters...</div>
+  <div class="notice" id="notice">Press ROLL to see how many letters the RNG gives you...</div>
   <div class="letters" id="letters"></div>
   <div class="controls">
     <button class="roll" id="rollBtn">ROLL LETTERS</button>
-    <div class="hint">Each letter is revealed one at a time. Rare patterns give more points.</div>
+    <div class="hint">The number of letters is random. Each letter is revealed one at a time, so you have to wait for the result!</div>
   </div>
   <div class="findings" id="findings"></div>
 </div>
@@ -96,7 +96,12 @@ const BADGES=[
 {id:"unique",name:"ALL UNIQUE",rarity:"uncommon",chance:"Uncommon",points:25,desc:"All six letters are different."},
 {id:"firstlast",name:"BOOKENDS",rarity:"rare",chance:"Rare",points:45,desc:"The first and last letters match."},
 {id:"doublepair",name:"DOUBLE DOUBLE",rarity:"rare",chance:"Rare",points:80,desc:"Two different pairs appear."},
-{id:"word",name:"SIX LETTER WORD",rarity:"legendary",chance:"Legendary",points:3000,desc:"All six random letters form a 6-letter English word."}
+{id:"word",name:"SIX LETTER WORD",rarity:"legendary",chance:"Legendary",points:3000,desc:"All six random letters form a 6-letter English word."},
+{id:"fiveletters",name:"FIVE LETTER ROLL",rarity:"rare",chance:"Rare",points:60,desc:"The RNG decided to give you exactly 5 letters."},
+{id:"fourletters",name:"FOUR LETTER ROLL",rarity:"epic",chance:"Epic",points:150,desc:"The RNG decided to give you exactly 4 letters."},
+{id:"threeletters",name:"THREE LETTER ROLL",rarity:"legendary",chance:"Legendary",points:500,desc:"The RNG decided to give you exactly 3 letters."},
+{id:"twoletters",name:"TWO LETTER ROLL",rarity:"mythic",chance:"Mythic",points:1500,desc:"The RNG decided to give you exactly 2 letters."},
+{id:"oneletter",name:"ONE LETTER ROLL",rarity:"mythic",chance:"Mythic",points:5000,desc:"The RNG decided to give you exactly 1 letter."}
 ];
 const twoWords=new Set(["am","an","as","at","be","by","do","go","he","if","in","is","it","me","my","no","of","oh","on","or","so","to","up","us","we","ax","ex","ox"]);
 const threeWords=new Set(["ace","act","add","age","air","all","and","ant","any","ape","arm","art","ate","bad","bag","ban","bar","bat","bed","bee","bet","big","bit","box","boy","bud","bus","buy","can","car","cat","cow","cry","cup","cut","day","did","dog","dot","dry","ear","eat","egg","end","eye","far","fat","few","fig","fin","fit","fox","fun","get","god","got","hat","hen","her","him","his","hot","how","ice","ink","jam","jar","job","joy","key","kid","leg","let","lie","lip","log","lot","low","man","map","may","men","mix","mom","mud","net","new","nod","not","now","nut","oak","off","oil","old","one","out","owl","own","pan","pay","pen","pet","pie","pig","pin","pop","pot","red","run","sad","sea","see","set","she","sit","six","sky","son","sun","tap","tea","ten","the","tie","tin","top","toy","try","two","use","van","war","way","web","wet","win","won","yes","you","zoo"]);
@@ -153,17 +158,18 @@ function updateStats(){$("points").textContent=state.points.toLocaleString();$("
 function counts(s){return [...s].reduce((o,c)=>(o[c]=(o[c]||0)+1,o),{})}
 function hasWord(s,set,len){for(let i=0;i<=s.length-len;i++)if(set.has(s.slice(i,i+len)))return true;return false}
 function check(s){
- const c=counts(s),vals=Object.values(c),keys=Object.keys(c),out=[];
+ const c=counts(s),vals=Object.values(c),keys=Object.keys(c),out=[]; const len=s.length;
  if(hasWord(s.toLowerCase(),twoWords,2))out.push("two");
  if(hasWord(s.toLowerCase(),threeWords,3))out.push("three");
- if(s.slice(0,3)===s.slice(3).split("").reverse().join(""))out.push("mirror");
+ if(len===6 && s.slice(0,3)===s.slice(3).split("").reverse().join(""))out.push("mirror");
  if(s===s.split("").reverse().join(""))out.push("pal");
  if(vals.includes(6))out.push("same");if(vals.includes(5))out.push("five");if(vals.includes(4))out.push("four");if(vals.includes(3))out.push("triple");if(vals.includes(2))out.push("double");
  if([...s].filter(x=>vowels.has(x)).length>=4)out.push("vowels");if([...s].every(x=>!vowels.has(x)))out.push("novowels");
- let asc=true,desc=true;for(let i=1;i<6;i++){if(s.charCodeAt(i)!==s.charCodeAt(i-1)+1)asc=false;if(s.charCodeAt(i)!==s.charCodeAt(i-1)-1)desc=false}
+ let asc=len>=2,desc=len>=2;for(let i=1;i<len;i++){if(s.charCodeAt(i)!==s.charCodeAt(i-1)+1)asc=false;if(s.charCodeAt(i)!==s.charCodeAt(i-1)-1)desc=false}
  if(asc)out.push("alphabet");if(desc)out.push("reversealpha");
- if(new Set([s[0],s[1]]).size===2&&[...s].every((x,i)=>x===s[i%2]))out.push("alternating");
- if(keys.length===6)out.push("unique");if(s[0]===s[5])out.push("firstlast");if(vals.filter(v=>v===2).length>=2)out.push("doublepair");if(sixWords.has(s.toLowerCase()))out.push("word");
+ if(len>=2 && new Set([s[0],s[1]]).size===2&&[...s].every((x,i)=>x===s[i%2]))out.push("alternating");
+ if(keys.length===len)out.push("unique");if(len>=2 && s[0]===s[len-1])out.push("firstlast");if(vals.filter(v=>v===2).length>=2)out.push("doublepair");if(len===6 && sixWords.has(s.toLowerCase()))out.push("word");
+ if(len===5)out.push("fiveletters"); if(len===4)out.push("fourletters"); if(len===3)out.push("threeletters"); if(len===2)out.push("twoletters"); if(len===1)out.push("oneletter");
  return [...new Set(out)];
 }
 function rarityWeight(ids){return ids.reduce((sum,id)=>sum+(BADGES.find(b=>b.id===id)?.points||0),0)}
@@ -179,12 +185,25 @@ async function roll(){
  const btn=$("rollBtn");if(btn.disabled)return;btn.disabled=true;
  $("findings").innerHTML="";$("notice").textContent="🎲 Rolling... focus...";
  $("letters").innerHTML="";
- const arr=[...Array(6)].map(()=>String.fromCharCode(65+Math.floor(Math.random()*26)));
- // Suspense: each letter takes time to reveal.
- for(let i=0;i<6;i++){
-   await sleep(520);
+ // Roll length probabilities: 6 = 65%, 5 = 16%, 4 = 9%, 3 = 6%, 2 = 3%, 1 = 1%.
+ const lengthRoll=Math.random();
+ let rollLength;
+ if(lengthRoll<0.01) rollLength=1;
+ else if(lengthRoll<0.04) rollLength=2;
+ else if(lengthRoll<0.10) rollLength=3;
+ else if(lengthRoll<0.19) rollLength=4;
+ else if(lengthRoll<0.35) rollLength=5;
+ else rollLength=6;
+
+ $("notice").textContent=`🎲 The RNG has chosen... ${rollLength} letter${rollLength===1?"":"s"}...`;
+ await sleep(1100);
+
+ const arr=[...Array(rollLength)].map(()=>String.fromCharCode(65+Math.floor(Math.random()*26)));
+ // Extra suspense for the final letters.
+ for(let i=0;i<rollLength;i++){
+   await sleep(650);
    let d=document.createElement("div");d.className="letter reveal";d.textContent=arr[i];$("letters").appendChild(d);
-   await sleep(180);
+   if(i<rollLength-1) await sleep(250);
  }
  await sleep(650);
  const s=arr.join(""),ids=check(s),names=ids.map(id=>BADGES.find(b=>b.id===id).name),pts=rarityWeight(ids);
