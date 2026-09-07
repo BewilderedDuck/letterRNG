@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Letter RNG</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:radial-gradient(circle at top,#27346a,#0d1020 62%);color:#fff;min-height:100vh}
+.container{max-width:1100px;margin:auto;padding:26px 18px 55px}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin-bottom:18px}
+.brand h1{margin:0;font-size:40px;letter-spacing:1px}.subtitle{color:#aeb8df;margin-top:5px}
+.stats{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}.stat{background:#171b35;border:1px solid #30385f;border-radius:12px;padding:9px 13px;text-align:center;min-width:82px}.stat b{display:block;font-size:19px}.stat span{font-size:10px;color:#8e99c5}
+.userbar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}.userpill{background:#181d38;border:1px solid #30385f;padding:9px 12px;border-radius:12px}.userpill strong{color:#fff}.logout{background:#252b4b;box-shadow:0 3px 0 #161a31;padding:9px 13px;font-size:13px}
+.card{background:rgba(20,24,48,.94);border:1px solid #323b67;border-radius:20px;padding:24px;box-shadow:0 15px 50px #0006}
+.notice{text-align:center;color:#b7c1e8;min-height:27px;font-size:15px}.letters{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:24px 0 16px;min-height:88px}
+.letter{width:72px;height:72px;border-radius:15px;background:#20284c;border:2px solid #56618f;display:grid;place-items:center;font-size:37px;font-weight:900;box-shadow:inset 0 -7px 0 #11162d,0 0 0 transparent;transition:.2s}
+.letter.reveal{animation:reveal .55s ease}.letter.glow{box-shadow:inset 0 -7px 0 #11162d,0 0 22px #818cf8}
+@keyframes reveal{0%{opacity:0;transform:translateY(-18px) scale(.7);filter:blur(5px)}65%{transform:translateY(4px) scale(1.1)}100%{opacity:1;transform:none;filter:none}}
+.controls{text-align:center}.roll{font-size:21px;padding:15px 46px;margin:7px;border-radius:12px;font-weight:900;cursor:pointer;color:white;background:#5865f2;border:0;box-shadow:0 5px 0 #3943a9}.roll:active{transform:translateY(4px);box-shadow:0 1px 0 #3943a9}.roll:disabled{opacity:.5;cursor:not-allowed}
+.hint{text-align:center;color:#7f8abb;font-size:12px;margin-top:5px}
+.findings{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:20px}.badge{padding:14px;border-radius:13px;background:#181d38;border:1px solid #30385f}.badge.new{animation:shine 1s ease}.badge .name{font-weight:900}.badge .rarity{font-size:12px;margin-top:4px}.badge .desc{font-size:12px;color:#9fa9cf;margin-top:5px}.badge .pts{font-size:12px;margin-top:7px;font-weight:800}
+@keyframes shine{50%{box-shadow:0 0 30px #fbbf24}}
+.common{color:#b7c0d8}.uncommon{color:#6ee7b7}.rare{color:#60a5fa}.epic{color:#c084fc}.legendary{color:#fbbf24}.mythic{color:#fb7185}
+.tabs{display:flex;gap:8px;margin:20px 0 10px;flex-wrap:wrap}.tab{background:#171b35;box-shadow:none;border:1px solid #30385f;padding:10px 15px;border-radius:11px;color:white;font-weight:800;cursor:pointer}.tab.active{background:#5865f2}
+.panel{display:none}.panel.active{display:block}.collection{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.locked{opacity:.35;filter:grayscale(1)}.progress{height:8px;background:#10142a;border-radius:10px;overflow:hidden;margin-top:8px}.bar{height:100%;background:#5865f2;width:0}
+.log{max-height:280px;overflow:auto}.logrow{padding:8px 0;border-bottom:1px solid #292f50;font-family:monospace}
+.overlay{position:fixed;inset:0;background:rgba(7,9,18,.88);display:grid;place-items:center;z-index:20;padding:18px}.auth{width:min(420px,100%);background:#151a34;border:1px solid #394572;border-radius:20px;padding:25px;box-shadow:0 25px 80px #0009}.auth h2{text-align:center;margin-top:0}.auth p{color:#aeb8df;text-align:center;font-size:13px}.auth input{width:100%;padding:13px;margin:7px 0;border-radius:10px;border:1px solid #394572;background:#0e1327;color:white;font-size:15px}.auth button{width:100%;margin-top:9px}.toggle{text-align:center;margin-top:14px;color:#9fa9cf;cursor:pointer;font-size:13px}.err{text-align:center;color:#fb7185;min-height:20px;font-size:13px}
+.hidden{display:none!important}
+@media(max-width:650px){header{flex-direction:column}.stats{justify-content:flex-start}h1{font-size:31px}.letter{width:53px;height:60px;font-size:30px}.card{padding:16px}}
+</style>
+</head>
+<body>
+
+<div id="authOverlay" class="overlay">
+  <div class="auth">
+    <h2 id="authTitle">🔤 Letter RNG</h2>
+    <p id="authText">Create a local account to save your username, points and badge collection on this browser.</p>
+    <input id="authUser" maxlength="20" placeholder="Username">
+    <input id="authPass" type="password" maxlength="40" placeholder="Password">
+    <div class="err" id="authErr"></div>
+    <button class="roll" id="authBtn">CREATE ACCOUNT</button>
+    <div class="toggle" id="authToggle">Already have an account? Log in</div>
+  </div>
+</div>
+
+<div class="container hidden" id="app">
+<header>
+  <div class="brand"><h1>🔤 Letter RNG</h1><div class="subtitle">Roll letters. Discover ridiculous patterns.</div></div>
+  <div class="stats">
+    <div class="stat"><b id="points">0</b><span>POINTS</span></div>
+    <div class="stat"><b id="rolls">0</b><span>ROLLS</span></div>
+    <div class="stat"><b id="found">0/18</b><span>BADGES</span></div>
+  </div>
+</header>
+
+<div class="userbar">
+  <div class="userpill">👤 <strong id="username">Player</strong></div>
+  <button class="logout" id="logout">LOG OUT</button>
+</div>
+
+<div class="card">
+  <div class="notice" id="notice">Press ROLL to generate 6 random letters...</div>
+  <div class="letters" id="letters"></div>
+  <div class="controls">
+    <button class="roll" id="rollBtn">ROLL LETTERS</button>
+    <div class="hint">Each letter is revealed one at a time. Rare patterns give more points.</div>
+  </div>
+  <div class="findings" id="findings"></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="collection">Badge Collection</button>
+  <button class="tab" data-tab="history">Roll History</button>
+</div>
+<div id="collection" class="panel active card"><div class="collection" id="collectionGrid"></div></div>
+<div id="history" class="panel card"><div class="log" id="historyLog"><div class="notice">No rolls yet.</div></div></div>
+</div>
+
+<script>
+const BADGES=[
+{id:"two",name:"TWO LETTER WORD",rarity:"common",chance:"Common",points:5,desc:"Your random letters contain a 2-letter English word."},
+{id:"three",name:"THREE LETTER WORD",rarity:"uncommon",chance:"Uncommon",points:15,desc:"Your six letters contain a 3-letter English word."},
+{id:"mirror",name:"MIRROR",rarity:"epic",chance:"Epic",points:100,desc:"The first 3 letters are the reverse of the last 3."},
+{id:"pal",name:"PALINDROME",rarity:"legendary",chance:"Legendary",points:500,desc:"The whole 6-letter formation reads the same backwards."},
+{id:"same",name:"SIX OF A KIND",rarity:"mythic",chance:"Mythic",points:10000,desc:"All six letters are identical."},
+{id:"five",name:"FIVE OF A KIND",rarity:"legendary",chance:"Legendary",points:2000,desc:"Five of your six letters are identical."},
+{id:"four",name:"FOUR OF A KIND",rarity:"epic",chance:"Epic",points:350,desc:"Four of your six letters are identical."},
+{id:"triple",name:"TRIPLE",rarity:"rare",chance:"Rare",points:75,desc:"At least three identical letters appear."},
+{id:"double",name:"DOUBLE",rarity:"common",chance:"Common",points:10,desc:"A letter appears exactly twice."},
+{id:"vowels",name:"VOWEL STORM",rarity:"rare",chance:"Rare",points:50,desc:"At least four letters are vowels."},
+{id:"novowels",name:"NO VOWELS",rarity:"uncommon",chance:"Uncommon",points:20,desc:"There are zero vowels."},
+{id:"alphabet",name:"ALPHABET RUN",rarity:"epic",chance:"Epic",points:400,desc:"Six letters go consecutively through the alphabet."},
+{id:"reversealpha",name:"REVERSE RUN",rarity:"legendary",chance:"Legendary",points:1500,desc:"Six letters go consecutively backwards."},
+{id:"alternating",name:"ALTERNATOR",rarity:"rare",chance:"Rare",points:90,desc:"Positions alternate between two letters."},
+{id:"unique",name:"ALL UNIQUE",rarity:"uncommon",chance:"Uncommon",points:25,desc:"All six letters are different."},
+{id:"firstlast",name:"BOOKENDS",rarity:"rare",chance:"Rare",points:45,desc:"The first and last letters match."},
+{id:"doublepair",name:"DOUBLE DOUBLE",rarity:"rare",chance:"Rare",points:80,desc:"Two different pairs appear."},
+{id:"word",name:"SIX LETTER WORD",rarity:"legendary",chance:"Legendary",points:3000,desc:"All six random letters form a 6-letter English word."}
+];
+const twoWords=new Set(["am","an","as","at","be","by","do","go","he","if","in","is","it","me","my","no","of","oh","on","or","so","to","up","us","we","ax","ex","ox"]);
+const threeWords=new Set(["ace","act","add","age","air","all","and","ant","any","ape","arm","art","ate","bad","bag","ban","bar","bat","bed","bee","bet","big","bit","box","boy","bud","bus","buy","can","car","cat","cow","cry","cup","cut","day","did","dog","dot","dry","ear","eat","egg","end","eye","far","fat","few","fig","fin","fit","fox","fun","get","god","got","hat","hen","her","him","his","hot","how","ice","ink","jam","jar","job","joy","key","kid","leg","let","lie","lip","log","lot","low","man","map","may","men","mix","mom","mud","net","new","nod","not","now","nut","oak","off","oil","old","one","out","owl","own","pan","pay","pen","pet","pie","pig","pin","pop","pot","red","run","sad","sea","see","set","she","sit","six","sky","son","sun","tap","tea","ten","the","tie","tin","top","toy","try","two","use","van","war","way","web","wet","win","won","yes","you","zoo"]);
+const sixWords=new Set(["almost","animal","banana","basket","battle","better","button","castle","cherry","circle","coffee","cookie","dragon","dreams","friend","garden","hammer","jungle","kitten","letter","little","london","mango","market","mirror","monkey","mother","orange","people","planet","player","purple","rabbit","random","rocket","school","secret","silver","simple","soccer","summer","tetris","turtle","winter","wizard"]);
+const vowels=new Set(["A","E","I","O","U"]);
+
+let loginMode="register", currentUser=null;
+const $=id=>document.getElementById(id);
+const getAccounts=()=>JSON.parse(localStorage.lr_accounts||"{}");
+const setAccounts=x=>localStorage.lr_accounts=JSON.stringify(x);
+
+function openAuth(mode){
+ loginMode=mode;
+ $("authTitle").textContent=mode==="register"?"🔤 Letter RNG":"🔐 Welcome Back";
+ $("authText").textContent=mode==="register"?"Create a local account to save your username, points and badge collection on this browser.":"Log into your local Letter RNG account.";
+ $("authBtn").textContent=mode==="register"?"CREATE ACCOUNT":"LOG IN";
+ $("authToggle").textContent=mode==="register"?"Already have an account? Log in":"Need an account? Create one";
+ $("authErr").textContent="";
+ $("authUser").value="";$("authPass").value="";
+ $("authOverlay").classList.remove("hidden"); $("app").classList.add("hidden");
+}
+$("authToggle").onclick=()=>openAuth(loginMode==="register"?"login":"register");
+
+function loadUserData(user){
+ const accounts=getAccounts(); currentUser=user;
+ if(!accounts[user]) accounts[user]={password:"",points:0,rolls:0,found:{},history:[]};
+ return accounts[user];
+}
+function saveUserData(){
+ const accounts=getAccounts(); accounts[currentUser]=state; setAccounts(accounts);
+}
+let state=null;
+$("authBtn").onclick=()=>{
+ const u=$("authUser").value.trim(), p=$("authPass").value;
+ if(!/^[A-Za-z0-9_ -]{3,20}$/.test(u)) return $("authErr").textContent="Username must be 3-20 characters.";
+ if(p.length<4) return $("authErr").textContent="Password must be at least 4 characters.";
+ const accounts=getAccounts();
+ if(loginMode==="register"){
+   if(accounts[u]) return $("authErr").textContent="That username already exists.";
+   accounts[u]={password:p,points:0,rolls:0,found:{},history:[]};setAccounts(accounts);
+ }else{
+   if(!accounts[u] || accounts[u].password!==p) return $("authErr").textContent="Incorrect username or password.";
+ }
+ startGame(u);
+};
+$("logout").onclick=()=>{currentUser=null;state=null;openAuth("login");};
+
+function startGame(user){
+ currentUser=user; state=loadUserData(user);
+ $("username").textContent=user;$("authOverlay").classList.add("hidden");$("app").classList.remove("hidden");
+ renderCollection();renderHistory();updateStats();
+}
+function updateStats(){$("points").textContent=state.points.toLocaleString();$("rolls").textContent=state.rolls;$("found").textContent=Object.keys(state.found).length+"/"+BADGES.length;}
+function counts(s){return [...s].reduce((o,c)=>(o[c]=(o[c]||0)+1,o),{})}
+function hasWord(s,set,len){for(let i=0;i<=s.length-len;i++)if(set.has(s.slice(i,i+len)))return true;return false}
+function check(s){
+ const c=counts(s),vals=Object.values(c),keys=Object.keys(c),out=[];
+ if(hasWord(s.toLowerCase(),twoWords,2))out.push("two");
+ if(hasWord(s.toLowerCase(),threeWords,3))out.push("three");
+ if(s.slice(0,3)===s.slice(3).split("").reverse().join(""))out.push("mirror");
+ if(s===s.split("").reverse().join(""))out.push("pal");
+ if(vals.includes(6))out.push("same");if(vals.includes(5))out.push("five");if(vals.includes(4))out.push("four");if(vals.includes(3))out.push("triple");if(vals.includes(2))out.push("double");
+ if([...s].filter(x=>vowels.has(x)).length>=4)out.push("vowels");if([...s].every(x=>!vowels.has(x)))out.push("novowels");
+ let asc=true,desc=true;for(let i=1;i<6;i++){if(s.charCodeAt(i)!==s.charCodeAt(i-1)+1)asc=false;if(s.charCodeAt(i)!==s.charCodeAt(i-1)-1)desc=false}
+ if(asc)out.push("alphabet");if(desc)out.push("reversealpha");
+ if(new Set([s[0],s[1]]).size===2&&[...s].every((x,i)=>x===s[i%2]))out.push("alternating");
+ if(keys.length===6)out.push("unique");if(s[0]===s[5])out.push("firstlast");if(vals.filter(v=>v===2).length>=2)out.push("doublepair");if(sixWords.has(s.toLowerCase()))out.push("word");
+ return [...new Set(out)];
+}
+function rarityWeight(ids){return ids.reduce((sum,id)=>sum+(BADGES.find(b=>b.id===id)?.points||0),0)}
+function renderCollection(){
+ $("collectionGrid").innerHTML=BADGES.map(b=>`<div class="badge ${state.found[b.id]?'':'locked'}"><div class="name">${state.found[b.id]?'🏅':'🔒'} ${b.name}</div><div class="rarity ${b.rarity}">${b.chance} • ${b.points.toLocaleString()} pts</div><div class="desc">${b.desc}</div><div class="progress"><div class="bar" style="width:${state.found[b.id]?100:0}%"></div></div></div>`).join("");
+ updateStats();
+}
+function renderHistory(){
+ $("historyLog").innerHTML=state.history.length?state.history.slice().reverse().map(x=>`<div class="logrow"><b>${x.s}</b> — ${x.names.length?x.names.join(", "):"Nothing found"}${x.points?` <span style="color:#fbbf24">(+${x.points})</span>`:""}</div>`).join(""):"<div class='notice'>No rolls yet.</div>";
+}
+async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+async function roll(){
+ const btn=$("rollBtn");if(btn.disabled)return;btn.disabled=true;
+ $("findings").innerHTML="";$("notice").textContent="🎲 Rolling... focus...";
+ $("letters").innerHTML="";
+ const arr=[...Array(6)].map(()=>String.fromCharCode(65+Math.floor(Math.random()*26)));
+ // Suspense: each letter takes time to reveal.
+ for(let i=0;i<6;i++){
+   await sleep(520);
+   let d=document.createElement("div");d.className="letter reveal";d.textContent=arr[i];$("letters").appendChild(d);
+   await sleep(180);
+ }
+ await sleep(650);
+ const s=arr.join(""),ids=check(s),names=ids.map(id=>BADGES.find(b=>b.id===id).name),pts=rarityWeight(ids);
+ ids.forEach(id=>{if(!state.found[id])state.found[id]=1;});
+ state.points+=pts;state.rolls++;state.history.push({s,names,points:pts});if(state.history.length>100)state.history.shift();saveUserData();
+ [...$("letters").children].forEach(e=>e.classList.add("glow"));
+ if(names.length){
+   $("notice").innerHTML=`✨ <b>${names.length} pattern${names.length>1?"s":""} found!</b> &nbsp; <span style="color:#fbbf24">+${pts.toLocaleString()} points</span>`;
+   $("findings").innerHTML=ids.map(id=>{let b=BADGES.find(x=>x.id===id);return `<div class="badge new"><div class="name">🏅 ${b.name}</div><div class="rarity ${b.rarity}">${b.chance}</div><div class="desc">${b.desc}</div><div class="pts">+${b.points.toLocaleString()} points</div></div>`}).join("");
+ }else $("notice").textContent="Nothing special... maybe the next roll is the one.";
+ renderCollection();renderHistory();btn.disabled=false;
+}
+$("rollBtn").onclick=roll;
+document.addEventListener("keydown",e=>{if($("app").classList.contains("hidden"))return;if((e.code==="Space"||e.key.toLowerCase()==="r")&&!$("rollBtn").disabled){e.preventDefault();roll()}});
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.tab).classList.add("active")});
+openAuth("register");
+</script>
+</body>
+</html>
