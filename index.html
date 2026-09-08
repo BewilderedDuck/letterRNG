@@ -22,6 +22,12 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
 .findings{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:20px}.badge{padding:14px;border-radius:13px;background:#181d38;border:1px solid #30385f}.badge.new{animation:shine 1s ease}.badge .name{font-weight:900}.badge .rarity{font-size:12px;margin-top:4px}.badge .desc{font-size:12px;color:#9fa9cf;margin-top:5px}.badge .pts{font-size:12px;margin-top:7px;font-weight:800}
 @keyframes shine{50%{box-shadow:0 0 30px #fbbf24}}
 .common{color:#b7c0d8}.uncommon{color:#6ee7b7}.rare{color:#60a5fa}.epic{color:#c084fc}.legendary{color:#fbbf24}.mythic{color:#fb7185}
+.mutation-neon{border-color:#22f5ff;background:linear-gradient(145deg,#17294a,#122d42);box-shadow:0 0 20px #22f5ff,inset 0 -7px 0 #0a1730!important;color:#7fffff}
+.mutation-epic{border-color:#b26cff;background:linear-gradient(145deg,#29204f,#1d1738);box-shadow:0 0 20px #b26cff,inset 0 -7px 0 #120b2a!important;color:#dcb7ff}
+.mutation-mythic{border-color:#ff3d81;background:linear-gradient(145deg,#4a1730,#271124);box-shadow:0 0 25px #ff3d81,inset 0 -7px 0 #170918!important;color:#ff9fbd}
+.mutation-tag{font-size:9px;font-weight:900;letter-spacing:.7px;margin-top:2px;opacity:.9}
+.mutation-neon .mutation-tag{color:#22f5ff}.mutation-epic .mutation-tag{color:#c084fc}.mutation-mythic .mutation-tag{color:#fb7185}
+
 .tabs{display:flex;gap:8px;margin:20px 0 10px;flex-wrap:wrap}.tab{background:#171b35;box-shadow:none;border:1px solid #30385f;padding:10px 15px;border-radius:11px;color:white;font-weight:800;cursor:pointer}.tab.active{background:#5865f2}
 .panel{display:none}.panel.active{display:block}.collection{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.locked{opacity:.35;filter:grayscale(1)}.progress{height:8px;background:#10142a;border-radius:10px;overflow:hidden;margin-top:8px}.bar{height:100%;background:#5865f2;width:0}
 .log{max-height:280px;overflow:auto}.logrow{padding:8px 0;border-bottom:1px solid #292f50;font-family:monospace}
@@ -46,7 +52,7 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
 
 <div class="container hidden" id="app">
 <header>
-  <div class="brand"><h1>🔤 Letter RNG</h1><div class="subtitle">Roll letters. Discover ridiculous patterns.</div></div>
+  <div class="brand"><h1>🔤 Letter RNG</h1><div class="subtitle">Roll letters. Discover ridiculous patterns. Survive the mutations.</div></div>
   <div class="stats">
     <div class="stat"><b id="points">0</b><span>POINTS</span></div>
     <div class="stat"><b id="rolls">0</b><span>ROLLS</span></div>
@@ -64,7 +70,7 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
   <div class="letters" id="letters"></div>
   <div class="controls">
     <button class="roll" id="rollBtn">ROLL LETTERS</button>
-    <div class="hint">The number of letters is random. Each letter is revealed one at a time, so you have to wait for the result!</div>
+    <div class="hint">The number of letters is random. Every letter can also mutate into Neon, Epic or Mythic.</div>
   </div>
   <div class="findings" id="findings"></div>
 </div>
@@ -101,7 +107,12 @@ const BADGES=[
 {id:"fourletters",name:"FOUR LETTER ROLL",rarity:"epic",chance:"Epic",points:150,desc:"The RNG decided to give you exactly 4 letters."},
 {id:"threeletters",name:"THREE LETTER ROLL",rarity:"legendary",chance:"Legendary",points:500,desc:"The RNG decided to give you exactly 3 letters."},
 {id:"twoletters",name:"TWO LETTER ROLL",rarity:"mythic",chance:"Mythic",points:1500,desc:"The RNG decided to give you exactly 2 letters."},
-{id:"oneletter",name:"ONE LETTER ROLL",rarity:"mythic",chance:"Mythic",points:5000,desc:"The RNG decided to give you exactly 1 letter."}
+{id:"oneletter",name:"ONE LETTER ROLL",rarity:"mythic",chance:"Mythic",points:5000,desc:"The RNG decided to give you exactly 1 letter."},
+{id:"neonmutation",name:"NEON MUTATION",rarity:"rare",chance:"Rare Mutation",points:125,desc:"At least one letter mutated into Neon."},
+{id:"epicmutation",name:"EPIC MUTATION",rarity:"epic",chance:"Epic Mutation",points:500,desc:"At least one letter mutated into Epic."},
+{id:"mythicmutation",name:"MYTHIC MUTATION",rarity:"mythic",chance:"Mythic Mutation",points:5000,desc:"At least one letter mutated into Mythic."},
+{id:"doublemutation",name:"DOUBLE MUTATION",rarity:"epic",chance:"Epic",points:750,desc:"Two or more letters mutated in one roll."},
+{id:"mutationrain",name:"MUTATION RAIN",rarity:"legendary",chance:"Legendary",points:2500,desc:"Three or more letters mutated in one roll."}
 ];
 const twoWords=new Set(["am","an","as","at","be","by","do","go","he","if","in","is","it","me","my","no","of","oh","on","or","so","to","up","us","we","ax","ex","ox"]);
 const threeWords=new Set(["ace","act","add","age","air","all","and","ant","any","ape","arm","art","ate","bad","bag","ban","bar","bat","bed","bee","bet","big","bit","box","boy","bud","bus","buy","can","car","cat","cow","cry","cup","cut","day","did","dog","dot","dry","ear","eat","egg","end","eye","far","fat","few","fig","fin","fit","fox","fun","get","god","got","hat","hen","her","him","his","hot","how","ice","ink","jam","jar","job","joy","key","kid","leg","let","lie","lip","log","lot","low","man","map","may","men","mix","mom","mud","net","new","nod","not","now","nut","oak","off","oil","old","one","out","owl","own","pan","pay","pen","pet","pie","pig","pin","pop","pot","red","run","sad","sea","see","set","she","sit","six","sky","son","sun","tap","tea","ten","the","tie","tin","top","toy","try","two","use","van","war","way","web","wet","win","won","yes","you","zoo"]);
@@ -156,6 +167,24 @@ function startGame(user){
 }
 function updateStats(){$("points").textContent=state.points.toLocaleString();$("rolls").textContent=state.rolls;$("found").textContent=Object.keys(state.found).length+"/"+BADGES.length;}
 function counts(s){return [...s].reduce((o,c)=>(o[c]=(o[c]||0)+1,o),{})}
+function rollMutation(){
+ const r=Math.random();
+ if(r<0.005)return "mythic";
+ if(r<0.030)return "epic";
+ if(r<0.110)return "neon";
+ return "normal";
+}
+function mutationBadgeIds(mutations){
+ const ids=[];
+ if(mutations.includes("neon"))ids.push("neonmutation");
+ if(mutations.includes("epic"))ids.push("epicmutation");
+ if(mutations.includes("mythic"))ids.push("mythicmutation");
+ const count=mutations.filter(m=>m!=="normal").length;
+ if(count>=2)ids.push("doublemutation");
+ if(count>=3)ids.push("mutationrain");
+ return ids;
+}
+
 function hasWord(s,set,len){for(let i=0;i<=s.length-len;i++)if(set.has(s.slice(i,i+len)))return true;return false}
 function check(s){
  const c=counts(s),vals=Object.values(c),keys=Object.keys(c),out=[]; const len=s.length;
@@ -178,7 +207,7 @@ function renderCollection(){
  updateStats();
 }
 function renderHistory(){
- $("historyLog").innerHTML=state.history.length?state.history.slice().reverse().map(x=>`<div class="logrow"><b>${x.s}</b> — ${x.names.length?x.names.join(", "):"Nothing found"}${x.points?` <span style="color:#fbbf24">(+${x.points})</span>`:""}</div>`).join(""):"<div class='notice'>No rolls yet.</div>";
+ $("historyLog").innerHTML=state.history.length?state.history.slice().reverse().map(x=>`<div class="logrow"><b>${x.s}</b> — ${x.names.length?x.names.join(", "):"Nothing found"}${x.mutations?.some(m=>m!=="normal")?` <span style="color:#22f5ff">[${x.mutations.filter(m=>m!=="normal").join(", ")}]</span>`:""}${x.points?` <span style="color:#fbbf24">(+${x.points})</span>`:""}</div>`).join(""):"<div class='notice'>No rolls yet.</div>";
 }
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 async function roll(){
@@ -198,22 +227,37 @@ async function roll(){
  $("notice").textContent=`🎲 The RNG has chosen... ${rollLength} letter${rollLength===1?"":"s"}...`;
  await sleep(1100);
 
- const arr=[...Array(rollLength)].map(()=>String.fromCharCode(65+Math.floor(Math.random()*26)));
- // Extra suspense for the final letters.
+ const lettersData=[...Array(rollLength)].map(()=>({
+   char:String.fromCharCode(65+Math.floor(Math.random()*26)),
+   mutation:rollMutation()
+ }));
+ const arr=lettersData.map(x=>x.char);
  for(let i=0;i<rollLength;i++){
    await sleep(650);
-   let d=document.createElement("div");d.className="letter reveal";d.textContent=arr[i];$("letters").appendChild(d);
+   const d=document.createElement("div");
+   d.className="letter reveal";
+   if(lettersData[i].mutation!=="normal"){
+     d.classList.add("mutation-"+lettersData[i].mutation);
+     d.innerHTML=`${lettersData[i].char}<div class="mutation-tag">${lettersData[i].mutation.toUpperCase()}</div>`;
+   } else d.textContent=lettersData[i].char;
+   $("letters").appendChild(d);
    if(i<rollLength-1) await sleep(250);
  }
- await sleep(650);
- const s=arr.join(""),ids=check(s),names=ids.map(id=>BADGES.find(b=>b.id===id).name),pts=rarityWeight(ids);
+ await sleep(900);
+ const s=arr.join("");
+ const mutationKinds=lettersData.map(x=>x.mutation);
+ const mutationIds=mutationBadgeIds(mutationKinds);
+ const ids=[...new Set([...check(s),...mutationIds])];
+ const names=ids.map(id=>BADGES.find(b=>b.id===id).name),pts=rarityWeight(ids);
  ids.forEach(id=>{if(!state.found[id])state.found[id]=1;});
- state.points+=pts;state.rolls++;state.history.push({s,names,points:pts});if(state.history.length>100)state.history.shift();saveUserData();
+ state.points+=pts;state.rolls++;state.history.push({s,names,points:pts,mutations:mutationKinds});if(state.history.length>100)state.history.shift();saveUserData();
  [...$("letters").children].forEach(e=>e.classList.add("glow"));
+ const mutationCount=mutationKinds.filter(m=>m!=="normal").length;
+ const mutationText=mutationCount?` 💥 ${mutationCount} mutation${mutationCount>1?"s":""}!`:"";
  if(names.length){
-   $("notice").innerHTML=`✨ <b>${names.length} pattern${names.length>1?"s":""} found!</b> &nbsp; <span style="color:#fbbf24">+${pts.toLocaleString()} points</span>`;
+   $("notice").innerHTML=`✨ <b>${names.length} pattern${names.length>1?"s":""} found!</b>${mutationText} &nbsp; <span style="color:#fbbf24">+${pts.toLocaleString()} points</span>`;
    $("findings").innerHTML=ids.map(id=>{let b=BADGES.find(x=>x.id===id);return `<div class="badge new"><div class="name">🏅 ${b.name}</div><div class="rarity ${b.rarity}">${b.chance}</div><div class="desc">${b.desc}</div><div class="pts">+${b.points.toLocaleString()} points</div></div>`}).join("");
- }else $("notice").textContent="Nothing special... maybe the next roll is the one.";
+ }else $("notice").textContent=mutationCount?`💥 Mutation detected!`:"Nothing special... maybe the next roll is the one.";
  renderCollection();renderHistory();btn.disabled=false;
 }
 $("rollBtn").onclick=roll;
