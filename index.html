@@ -25,6 +25,14 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
 .mutation-neon{border-color:#22f5ff;background:linear-gradient(145deg,#17294a,#122d42);box-shadow:0 0 20px #22f5ff,inset 0 -7px 0 #0a1730!important;color:#7fffff}
 .mutation-epic{border-color:#b26cff;background:linear-gradient(145deg,#29204f,#1d1738);box-shadow:0 0 20px #b26cff,inset 0 -7px 0 #120b2a!important;color:#dcb7ff}
 .mutation-mythic{border-color:#ff3d81;background:linear-gradient(145deg,#4a1730,#271124);box-shadow:0 0 25px #ff3d81,inset 0 -7px 0 #170918!important;color:#ff9fbd}
+.mutation-uncommon{border-color:#6ee7b7;background:linear-gradient(145deg,#17392f,#112720);box-shadow:0 0 15px #6ee7b7,inset 0 -7px 0 #0a1813!important;color:#a7f3d0}
+.mutation-rare{border-color:#60a5fa;background:linear-gradient(145deg,#172e4a,#102238);box-shadow:0 0 18px #60a5fa,inset 0 -7px 0 #091522!important;color:#93c5fd}
+.mutation-rainbow{border:2px solid transparent!important;background:linear-gradient(#20284c,#20284c) padding-box,linear-gradient(135deg,#ff4d6d,#ffd166,#4ade80,#38bdf8,#a78bfa) border-box!important;box-shadow:0 0 24px #f472b6,inset 0 -7px 0 #11162d!important;color:#fff}
+.mutation-catastrophic{border-color:#fff;background:radial-gradient(circle,#4b0014,#080010 72%);box-shadow:0 0 30px #fff,0 0 55px #ef4444,inset 0 -7px 0 #050005!important;color:#fff}
+.mutation-rainbow .mutation-tag{background:linear-gradient(90deg,#f87171,#facc15,#4ade80,#38bdf8,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent}
+.mutation-catastrophic .mutation-tag{color:#fff;text-shadow:0 0 8px #fff,0 0 15px #ef4444}
+.rollRarity{margin:0 auto 15px;text-align:center;font-weight:900;letter-spacing:1px;text-transform:uppercase}.rollRarity .tier{font-size:24px}.rollRarity .band{display:block;font-size:11px;color:#909bc8;margin-top:4px}.rarity-common{color:#b7c0d8}.rarity-uncommon{color:#6ee7b7}.rarity-rare{color:#60a5fa}.rarity-epic{color:#c084fc}.rarity-legendary{color:#fbbf24}.rarity-mythic{color:#fb7185}.rarity-rainbow{background:linear-gradient(90deg,#f87171,#facc15,#4ade80,#38bdf8,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent}.rarity-catastrophic{color:#fff;text-shadow:0 0 8px #fff,0 0 18px #ef4444}
+
 .mutation-tag{font-size:9px;font-weight:900;letter-spacing:.7px;margin-top:2px;opacity:.9}
 .mutation-neon .mutation-tag{color:#22f5ff}.mutation-epic .mutation-tag{color:#c084fc}.mutation-mythic .mutation-tag{color:#fb7185}
 
@@ -76,6 +84,7 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
 <div class="card">
   <div class="notice" id="notice">Press ROLL to see how many letters the RNG gives you...</div>
   <div class="letters" id="letters"></div>
+  <div class="rollRarity" id="rollRarity"><div class="tier rarity-common">COMMON</div><span class="band">Bottom 20%</span></div>
   <div class="controls">
     <button class="roll" id="rollBtn">ROLL LETTERS</button>
     <div class="hint">The number of letters is random. Every letter can also mutate into Neon, Epic or Mythic.</div>
@@ -177,7 +186,11 @@ const BADGES=[
 {id:"epicmutation",name:"EPIC MUTATION",rarity:"epic",chance:"Epic Mutation",points:500,desc:"At least one letter mutated into Epic."},
 {id:"mythicmutation",name:"MYTHIC MUTATION",rarity:"mythic",chance:"Mythic Mutation",points:5000,desc:"At least one letter mutated into Mythic."},
 {id:"doublemutation",name:"DOUBLE MUTATION",rarity:"epic",chance:"Epic",points:750,desc:"Two or more letters mutated in one roll."},
-{id:"mutationrain",name:"MUTATION RAIN",rarity:"legendary",chance:"Legendary",points:2500,desc:"Three or more letters mutated in one roll."}
+{id:"mutationrain",name:"MUTATION RAIN",rarity:"legendary",chance:"Legendary",points:2500,desc:"Three or more letters mutated in one roll."},
+{id:"uncommonmutation",name:"UNCOMMON MUTATION",rarity:"uncommon",chance:"Uncommon Mutation",points:35,desc:"At least one letter became an Uncommon Mutation."},
+{id:"raremutation",name:"RARE MUTATION",rarity:"rare",chance:"Rare Mutation",points:90,desc:"At least one letter became a Rare Mutation."},
+{id:"rainbowmutation",name:"RAINBOW MUTATION",rarity:"rainbow",chance:"Rainbow Mutation",points:25000,desc:"At least one letter became a Rainbow Mutation."},
+{id:"catastrophicmutation",name:"CATASTROPHIC MUTATION",rarity:"catastrophic",chance:"Catastrophic Mutation",points:1000000,desc:"A letter became Catastrophic. Almost nobody sees this."}
 ];
 const twoWords=new Set(["am","an","as","at","be","by","do","go","he","if","in","is","it","me","my","no","of","oh","on","or","so","to","up","us","we","ax","ex","ox"]);
 const threeWords=new Set(["ace","act","add","age","air","all","and","ant","any","ape","arm","art","ate","bad","bag","ban","bar","bat","bed","bee","bet","big","bit","box","boy","bud","bus","buy","can","car","cat","cow","cry","cup","cut","day","did","dog","dot","dry","ear","eat","egg","end","eye","far","fat","few","fig","fin","fit","fox","fun","get","god","got","hat","hen","her","him","his","hot","how","ice","ink","jam","jar","job","joy","key","kid","leg","let","lie","lip","log","lot","low","man","map","may","men","mix","mom","mud","net","new","nod","not","now","nut","oak","off","oil","old","one","out","owl","own","pan","pay","pen","pet","pie","pig","pin","pop","pot","red","run","sad","sea","see","set","she","sit","six","sky","son","sun","tap","tea","ten","the","tie","tin","top","toy","try","two","use","van","war","way","web","wet","win","won","yes","you","zoo"]);
@@ -303,16 +316,25 @@ function updateStats(){$("points").textContent=state.points.toLocaleString();$("
 function counts(s){return [...s].reduce((o,c)=>(o[c]=(o[c]||0)+1,o),{})}
 function rollMutation(){
  const r=Math.random();
- if(r<0.005)return "mythic";
- if(r<0.030)return "epic";
- if(r<0.110)return "neon";
- return "normal";
+ // Individual-letter mutation odds.
+ if(r<0.000005)return "catastrophic"; // 0.0005%
+ if(r<0.000205)return "rainbow";       // 0.02%
+ if(r<0.002205)return "mythic";        // 0.2%
+ if(r<0.010205)return "epic";          // 0.8%
+ if(r<0.030205)return "neon";          // 2%
+ if(r<0.080205)return "rare";          // 5%
+ if(r<0.230205)return "uncommon";      // 15%
+ return "normal";                      // 77%
 }
 function mutationBadgeIds(mutations){
  const ids=[];
+ if(mutations.includes("uncommon"))ids.push("uncommonmutation");
+ if(mutations.includes("rare"))ids.push("raremutation");
  if(mutations.includes("neon"))ids.push("neonmutation");
  if(mutations.includes("epic"))ids.push("epicmutation");
  if(mutations.includes("mythic"))ids.push("mythicmutation");
+ if(mutations.includes("rainbow"))ids.push("rainbowmutation");
+ if(mutations.includes("catastrophic"))ids.push("catastrophicmutation");
  const count=mutations.filter(m=>m!=="normal").length;
  if(count>=2)ids.push("doublemutation");
  if(count>=3)ids.push("mutationrain");
@@ -334,6 +356,25 @@ function check(s){
  if(keys.length===len)out.push("unique");if(len>=2 && s[0]===s[len-1])out.push("firstlast");if(vals.filter(v=>v===2).length>=2)out.push("doublepair");if(len===6 && sixWords.has(s.toLowerCase()))out.push("word");
  if(len===5)out.push("fiveletters"); if(len===4)out.push("fourletters"); if(len===3)out.push("threeletters"); if(len===2)out.push("twoletters"); if(len===1)out.push("oneletter");
  return [...new Set(out)];
+}
+
+const ROLL_RARITIES=[
+ {id:"catastrophic",name:"CATASTROPHIC",band:"Top 0.1%",min:100000},
+ {id:"rainbow",name:"RAINBOW",band:"Top 0.1%–3%",min:15000},
+ {id:"mythic",name:"MYTHIC",band:"Top 3%",min:2000},
+ {id:"legendary",name:"LEGENDARY",band:"Top 10%",min:600},
+ {id:"epic",name:"EPIC",band:"Top 20%",min:180},
+ {id:"rare",name:"RARE",band:"Top 40%",min:60},
+ {id:"uncommon",name:"UNCOMMON",band:"20%–40%",min:20},
+ {id:"common",name:"COMMON",band:"Bottom 20%",min:0}
+];
+function getRollRarity(points,ids){
+ const score=ids.includes("catastrophicmutation")?Math.max(points,1000000):
+   ids.includes("rainbowmutation")?Math.max(points,25000):points;
+ return ROLL_RARITIES.find(r=>score>=r.min)||ROLL_RARITIES[ROLL_RARITIES.length-1];
+}
+function renderRollRarity(r){
+ $("rollRarity").innerHTML=`<div class="tier rarity-${r.id}">${r.name}</div><span class="band">${r.band}</span>`;
 }
 function rarityWeight(ids){return ids.reduce((sum,id)=>sum+(BADGES.find(b=>b.id===id)?.points||0),0)}
 function renderCollection(){
@@ -382,14 +423,15 @@ async function roll(){
  const mutationKinds=lettersData.map(x=>x.mutation);
  const mutationIds=mutationBadgeIds(mutationKinds);
  const ids=[...new Set([...check(s),...mutationIds])];
- const names=ids.map(id=>BADGES.find(b=>b.id===id).name),pts=rarityWeight(ids);
+ const names=ids.map(id=>BADGES.find(b=>b.id===id).name),pts=rarityWeight(ids); const rollRarity=getRollRarity(pts,ids);
  ids.forEach(id=>{if(!state.found[id])state.found[id]=1;});
  state.points+=pts;state.rolls++;
- state.history.push({s,names,points:pts,mutations:mutationKinds});
+ state.history.push({s,names,points:pts,mutations:mutationKinds,rollRarity:rollRarity.id});
  if(state.history.length>100)state.history.shift();
- if(!state.bestRoll || pts>(state.bestRoll.points||0)) state.bestRoll={s,names,points:pts,mutations:mutationKinds};
+ if(!state.bestRoll || pts>(state.bestRoll.points||0)) state.bestRoll={s,names,points:pts,mutations:mutationKinds,rollRarity:rollRarity.id};
  saveUserData();
  [...$("letters").children].forEach(e=>e.classList.add("glow"));
+ renderRollRarity(rollRarity);
  const mutationCount=mutationKinds.filter(m=>m!=="normal").length;
  const mutationText=mutationCount?` 💥 ${mutationCount} mutation${mutationCount>1?"s":""}!`:"";
  if(names.length){
