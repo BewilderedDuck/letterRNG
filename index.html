@@ -31,7 +31,7 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
 .mutation-catastrophic{border-color:#fff;background:radial-gradient(circle,#4b0014,#080010 72%);box-shadow:0 0 30px #fff,0 0 55px #ef4444,inset 0 -7px 0 #050005!important;color:#fff}
 .mutation-rainbow .mutation-tag{background:linear-gradient(90deg,#f87171,#facc15,#4ade80,#38bdf8,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent}
 .mutation-catastrophic .mutation-tag{color:#fff;text-shadow:0 0 8px #fff,0 0 15px #ef4444}
-.rollRarity{margin:0 auto 15px;text-align:center;font-weight:900;letter-spacing:1px;text-transform:uppercase}.rollRarity .tier{font-size:24px}.rollRarity .band{display:block;font-size:11px;color:#909bc8;margin-top:4px}.rarity-common{color:#b7c0d8}.rarity-uncommon{color:#6ee7b7}.rarity-rare{color:#60a5fa}.rarity-epic{color:#c084fc}.rarity-legendary{color:#fbbf24}.rarity-mythic{color:#fb7185}.rarity-rainbow{background:linear-gradient(90deg,#f87171,#facc15,#4ade80,#38bdf8,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent}.rarity-catastrophic{color:#fff;text-shadow:0 0 8px #fff,0 0 18px #ef4444}
+.rollRarity.rolling{visibility:hidden;opacity:0}.rollRarity{margin:0 auto 15px;text-align:center;font-weight:900;letter-spacing:1px;text-transform:uppercase}.rollRarity .tier{font-size:24px}.rollRarity .band{display:block;font-size:11px;color:#909bc8;margin-top:4px}.rarity-common{color:#b7c0d8}.rarity-uncommon{color:#6ee7b7}.rarity-rare{color:#60a5fa}.rarity-epic{color:#c084fc}.rarity-legendary{color:#fbbf24}.rarity-mythic{color:#fb7185}.rarity-rainbow{background:linear-gradient(90deg,#f87171,#facc15,#4ade80,#38bdf8,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent}.rarity-catastrophic{color:#fff;text-shadow:0 0 8px #fff,0 0 18px #ef4444}
 
 .mutation-tag{font-size:9px;font-weight:900;letter-spacing:.7px;margin-top:2px;opacity:.9}
 .mutation-neon .mutation-tag{color:#22f5ff}.mutation-epic .mutation-tag{color:#c084fc}.mutation-mythic .mutation-tag{color:#fb7185}
@@ -68,7 +68,7 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
   <div class="stats">
     <div class="stat"><b id="points">0</b><span>POINTS</span></div>
     <div class="stat"><b id="rolls">0</b><span>ROLLS</span></div>
-    <div class="stat"><b id="found">0/28</b><span>BADGES</span></div>
+    <div class="stat"><b id="found">0</b><span>BADGES</span></div>
   </div>
 </header>
 
@@ -84,10 +84,10 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
 <div class="card">
   <div class="notice" id="notice">Press ROLL to see how many letters the RNG gives you...</div>
   <div class="letters" id="letters"></div>
-  <div class="rollRarity" id="rollRarity"><div class="tier rarity-common">COMMON</div><span class="band">Bottom 20%</span></div>
+  <div class="rollRarity" id="rollRarity"><div class="tier rarity-common">—</div><span class="band">Roll to reveal rarity</span></div><span class="band">LetterRNG</span></div>
   <div class="controls">
     <button class="roll" id="rollBtn">ROLL LETTERS</button>
-    <div class="hint">The number of letters is random. Every letter can also mutate into Neon, Epic or Mythic.</div>
+    <div class="hint">The number of letters is random. Find words and hidden letter combinations to build your collection.</div>
   </div>
   <div class="findings" id="findings"></div>
 </div>
@@ -190,10 +190,22 @@ const BADGES=[
 {id:"uncommonmutation",name:"UNCOMMON MUTATION",rarity:"uncommon",chance:"Uncommon Mutation",points:35,desc:"At least one letter became an Uncommon Mutation."},
 {id:"raremutation",name:"RARE MUTATION",rarity:"rare",chance:"Rare Mutation",points:90,desc:"At least one letter became a Rare Mutation."},
 {id:"rainbowmutation",name:"RAINBOW MUTATION",rarity:"rainbow",chance:"Rainbow Mutation",points:25000,desc:"At least one letter became a Rainbow Mutation."},
-{id:"catastrophicmutation",name:"CATASTROPHIC MUTATION",rarity:"catastrophic",chance:"Catastrophic Mutation",points:1000000,desc:"A letter became Catastrophic. Almost nobody sees this."}
+{id:"catastrophicmutation",name:"CATASTROPHIC MUTATION",rarity:"catastrophic",chance:"Catastrophic Mutation",points:1000000,desc:"A letter became Catastrophic. Almost nobody sees this."},
+{id:"twoletterword",name:"TWO LETTER WORD",rarity:"common",chance:"Common",points:15,desc:"Two adjacent letters form a valid 2-letter word."},
+{id:"threeletterword",name:"THREE LETTER WORD",rarity:"uncommon",chance:"Uncommon",points:40,desc:"Three adjacent letters form a valid 3-letter word."},
+{id:"fourletterword",name:"FOUR LETTER WORD",rarity:"rare",chance:"Rare",points:120,desc:"Four adjacent letters form a valid 4-letter word."},
+{id:"fiveletterword",name:"FIVE LETTER WORD",rarity:"epic",chance:"Epic",points:400,desc:"Five adjacent letters form a valid 5-letter word."},
+{id:"sixletterword",name:"SIX LETTER WORD",rarity:"legendary",chance:"Legendary",points:1500,desc:"All six letters form a valid 6-letter word."},
+{id:"doubleword",name:"DOUBLE WORD",rarity:"rare",chance:"Rare",points:200,desc:"Two separate valid words appear in the same roll."},
+{id:"wordmirror",name:"WORD MIRROR",rarity:"epic",chance:"Epic",points:700,desc:"One word appears and another word is its reverse."},
+{id:"wordchain",name:"WORD CHAIN",rarity:"legendary",chance:"Legendary",points:2200,desc:"Multiple overlapping word combinations appear."},
+{id:"vowelpair",name:"VOWEL PAIR",rarity:"uncommon",chance:"Uncommon",points:25,desc:"Two vowels appear next to each other."},
+{id:"consonantrun",name:"CONSONANT RUN",rarity:"rare",chance:"Rare",points:80,desc:"Four or more consonants appear in a row."}
 ];
 const twoWords=new Set(["am","an","as","at","be","by","do","go","he","if","in","is","it","me","my","no","of","oh","on","or","so","to","up","us","we","ax","ex","ox"]);
 const threeWords=new Set(["ace","act","add","age","air","all","and","ant","any","ape","arm","art","ate","bad","bag","ban","bar","bat","bed","bee","bet","big","bit","box","boy","bud","bus","buy","can","car","cat","cow","cry","cup","cut","day","did","dog","dot","dry","ear","eat","egg","end","eye","far","fat","few","fig","fin","fit","fox","fun","get","god","got","hat","hen","her","him","his","hot","how","ice","ink","jam","jar","job","joy","key","kid","leg","let","lie","lip","log","lot","low","man","map","may","men","mix","mom","mud","net","new","nod","not","now","nut","oak","off","oil","old","one","out","owl","own","pan","pay","pen","pet","pie","pig","pin","pop","pot","red","run","sad","sea","see","set","she","sit","six","sky","son","sun","tap","tea","ten","the","tie","tin","top","toy","try","two","use","van","war","way","web","wet","win","won","yes","you","zoo"]);
+const fourWords=new Set(["able","acid","also","area","away","baby","back","ball","bank","base","bear","beat","best","blue","boat","book","cake","call","calm","came","camp","card","care","city","club","cold","come","cool","door","down","draw","drop","each","easy","edge","else","even","ever","face","fact","fair","fall","farm","fast","fear","feel","file","fill","find","fire","fish","five","food","foot","free","from","game","gave","girl","give","glad","gold","good","hand","hard","head","help","here","high","home","hope","idea","into","jump","just","keep","kind","king","knew","know","lake","land","last","late","lead","life","like","line","list","long","look","made","make","many","mark","mean","meet","mile","mind","more","most","move","name","near","need","next","nice","open","over","page","pair","part","path","play","race","read","real","road","room","same","save","ship","shop","show","side","snow","some","song","soon","star","stay","step","stop","take","talk","team","tell","than","that","them","then","they","this","time","tiny","tree","true","turn","used","very","walk","wall","want","warm","wave","well","went","were","what","when","will","wind","wish","with","word","work","year","your"]);
+const fiveWords=new Set(["about","after","again","apple","beach","black","brain","bread","bring","brown","build","chair","class","clean","clear","clock","close","cloud","dance","dream","earth","early","every","field","first","floor","found","front","fruit","great","green","group","house","human","light","maybe","money","music","never","night","ocean","other","paper","plant","point","power","quick","right","river","round","school","short","sleep","small","smile","space","sport","stand","start","stone","story","thing","three","throw","today","water","white","whole","world","write","young"]);
 const sixWords=new Set(["almost","animal","banana","basket","battle","better","button","castle","cherry","circle","coffee","cookie","dragon","dreams","friend","garden","hammer","jungle","kitten","letter","little","london","mango","market","mirror","monkey","mother","orange","people","planet","player","purple","rabbit","random","rocket","school","secret","silver","simple","soccer","summer","tetris","turtle","winter","wizard"]);
 const vowels=new Set(["A","E","I","O","U"]);
 
@@ -342,6 +354,18 @@ function mutationBadgeIds(mutations){
 }
 
 function hasWord(s,set,len){for(let i=0;i<=s.length-len;i++)if(set.has(s.slice(i,i+len)))return true;return false}
+function findWords(s){
+ const low=s.toLowerCase(),found=[];
+ for(let i=0;i<low.length;i++){
+   for(const [set,len] of [[twoWords,2],[threeWords,3],[fourWords,4],[fiveWords,5],[sixWords,6]]){
+     if(i+len<=low.length){
+       const word=low.slice(i,i+len);
+       if(set.has(word))found.push({word,start:i,len});
+     }
+   }
+ }
+ return found;
+}
 function check(s){
  const c=counts(s),vals=Object.values(c),keys=Object.keys(c),out=[]; const len=s.length;
  if(hasWord(s.toLowerCase(),twoWords,2))out.push("two");
@@ -369,8 +393,10 @@ const ROLL_RARITIES=[
  {id:"common",name:"COMMON",band:"Bottom 20%",min:0}
 ];
 function getRollRarity(points,ids){
- const score=ids.includes("catastrophicmutation")?Math.max(points,1000000):
-   ids.includes("rainbowmutation")?Math.max(points,25000):points;
+ const wordIds=["twoletterword","threeletterword","fourletterword","fiveletterword","sixletterword","doubleword","wordmirror","wordchain","vowelpair","consonantrun"];
+ let score=points+ids.reduce((n,id)=>n+(wordIds.includes(id)?75:0),0);
+ if(ids.includes("catastrophicmutation"))score=Math.max(score,1000000);
+ else if(ids.includes("rainbowmutation"))score=Math.max(score,25000);
  return ROLL_RARITIES.find(r=>score>=r.min)||ROLL_RARITIES[ROLL_RARITIES.length-1];
 }
 function renderRollRarity(r){
@@ -387,7 +413,7 @@ function renderHistory(){
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 async function roll(){
  const btn=$("rollBtn");if(btn.disabled)return;btn.disabled=true;
- $("findings").innerHTML="";$("notice").textContent="🎲 Rolling... focus...";
+ $("findings").innerHTML="";$("notice").textContent="🎲 Rolling... focus...";$("letters").innerHTML="";$("rollRarity").classList.add("rolling");
  $("letters").innerHTML="";
  // Roll length probabilities: 6 = 65%, 5 = 16%, 4 = 9%, 3 = 6%, 2 = 3%, 1 = 1%.
  const lengthRoll=Math.random();
@@ -399,8 +425,8 @@ async function roll(){
  else if(lengthRoll<0.35) rollLength=5;
  else rollLength=6;
 
- $("notice").textContent=`🎲 The RNG has chosen... ${rollLength} letter${rollLength===1?"":"s"}...`;
- await sleep(1100);
+ $("notice").textContent="🎲 Rolling...";
+ await sleep(750);
 
  const lettersData=[...Array(rollLength)].map(()=>({
    char:String.fromCharCode(65+Math.floor(Math.random()*26)),
@@ -431,7 +457,7 @@ async function roll(){
  if(!state.bestRoll || pts>(state.bestRoll.points||0)) state.bestRoll={s,names,points:pts,mutations:mutationKinds,rollRarity:rollRarity.id};
  saveUserData();
  [...$("letters").children].forEach(e=>e.classList.add("glow"));
- renderRollRarity(rollRarity);
+ renderRollRarity(rollRarity); $("rollRarity").classList.remove("rolling");
  const mutationCount=mutationKinds.filter(m=>m!=="normal").length;
  const mutationText=mutationCount?` 💥 ${mutationCount} mutation${mutationCount>1?"s":""}!`:"";
  if(names.length){
