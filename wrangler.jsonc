@@ -1,0 +1,8 @@
+{
+  "name": "letter-rng-api",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-12",
+  "vars": {
+    "ALLOWED_ORIGIN": "https://bewilderedduck.github.io/letterRNG/"
+  }
+}
