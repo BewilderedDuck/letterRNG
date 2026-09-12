@@ -84,7 +84,7 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
 <div class="card">
   <div class="notice" id="notice">Press ROLL to see how many letters the RNG gives you...</div>
   <div class="letters" id="letters"></div>
-  <div class="rollRarity" id="rollRarity"><div class="tier rarity-common">—</div><span class="band">Roll to reveal rarity</span></div><span class="band">LetterRNG</span></div>
+  <div class="rollRarity" id="rollRarity"><div class="tier rarity-common">—</div><span class="band">Roll to reveal rarity</span></div><span class="band">Bottom 20%</span></div>
   <div class="controls">
     <button class="roll" id="rollBtn">ROLL LETTERS</button>
     <div class="hint">The number of letters is random. Find words and hidden letter combinations to build your collection.</div>
@@ -158,6 +158,8 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:15p
 </div>
 
 <script>
+const API_BASE = window.LETTER_RNG_API || "https://letterrng.bewildered20duck.workers.dev";
+
 const BADGES=[
 {id:"two",name:"TWO LETTER WORD",rarity:"common",chance:"Common",points:5,desc:"Your random letters contain a 2-letter English word."},
 {id:"three",name:"THREE LETTER WORD",rarity:"uncommon",chance:"Uncommon",points:15,desc:"Your six letters contain a 3-letter English word."},
@@ -210,26 +212,31 @@ const sixWords=new Set(["almost","animal","banana","basket","battle","better","b
 const vowels=new Set(["A","E","I","O","U"]);
 
 
-// SERVER HOOK POINT:
-// All account/profile persistence is routed through GameAPI.
-// In a future online version, replace these methods with fetch()/WebSocket
-// requests without changing the UI/game logic below.
+async function apiFetch(path, options={}){
+  if(API_BASE.includes("YOUR-WORKER")) throw new Error("Set API_BASE to your Cloudflare Worker URL in index.html.");
+  const res=await fetch(API_BASE+path,{...options,credentials:"include",headers:{"Content-Type":"application/json",...(options.headers||{})}});
+  let data={}; try{data=await res.json()}catch{}
+  if(!res.ok) throw new Error(data.error||"Server request failed.");
+  return data;
+}
 const GameAPI={
-  async getAccounts(){return JSON.parse(localStorage.lr_accounts||"{}")},
-  async setAccounts(accounts){localStorage.lr_accounts=JSON.stringify(accounts)},
-  async getUser(user){const a=await this.getAccounts();return a[user]||null},
-  async saveUser(user,data){const a=await this.getAccounts();a[user]=data;await this.setAccounts(a)},
-  async listUsers(){const a=await this.getAccounts();return Object.keys(a).map(username=>({username,...a[username]}))}
+  async register(username,password){return apiFetch('/api/auth/register',{method:'POST',body:JSON.stringify({username,password})})},
+  async login(username,password){return apiFetch('/api/auth/login',{method:'POST',body:JSON.stringify({username,password})})},
+  async logout(){return apiFetch('/api/auth/logout',{method:'POST'})},
+  async me(){return apiFetch('/api/auth/me')},
+  async roll(){return apiFetch('/api/roll',{method:'POST'})},
+  async updateProfile(patch){return apiFetch('/api/profile',{method:'PATCH',body:JSON.stringify(patch)})},
+  async players(){return apiFetch('/api/players')},
+  async player(username){return apiFetch('/api/player/'+encodeURIComponent(username))},
+  async history(){return apiFetch('/api/history')}
 };
-let loginMode="register", currentUser=null;
+let loginMode="register", currentUser=null, state=null, sessionReady=false;
 const $=id=>document.getElementById(id);
-const getAccounts=()=>JSON.parse(localStorage.lr_accounts||"{}");
-const setAccounts=x=>localStorage.lr_accounts=JSON.stringify(x);
 
 function openAuth(mode){
  loginMode=mode;
  $("authTitle").textContent=mode==="register"?"🔤 Letter RNG":"🔐 Welcome Back";
- $("authText").textContent=mode==="register"?"Create a local account to save your username, points and badge collection on this browser.":"Log into your local Letter RNG account.";
+ $("authText").textContent=mode==="register"?"Create your online Letter RNG account.":"Log into your online Letter RNG account.";
  $("authBtn").textContent=mode==="register"?"CREATE ACCOUNT":"LOG IN";
  $("authToggle").textContent=mode==="register"?"Already have an account? Log in":"Need an account? Create one";
  $("authErr").textContent="";
@@ -238,92 +245,80 @@ function openAuth(mode){
 }
 $("authToggle").onclick=()=>openAuth(loginMode==="register"?"login":"register");
 
-function loadUserData(user){
- const accounts=getAccounts(); currentUser=user;
- if(!accounts[user]) accounts[user]={password:"",points:0,rolls:0,found:{},history:[],bio:"",bestRoll:null,autoRoll:false,createdAt:Date.now()};
- if(accounts[user].bio===undefined)accounts[user].bio="";
- if(accounts[user].bestRoll===undefined)accounts[user].bestRoll=null;
- if(accounts[user].autoRoll===undefined)accounts[user].autoRoll=false;
- if(accounts[user].createdAt===undefined)accounts[user].createdAt=Date.now();
- setAccounts(accounts);
- return accounts[user];
+async function loadRemoteState(payload){
+ const profile=payload.profile;
+ const badges=profile?.badges||[];
+ state={...profile,found:{}};
+ badges.forEach(b=>state.found[b.badge_id]=1);
+ state.history=payload.history||[];
+ state.bestRoll=profile?.best_roll?{s:profile.best_roll,points:Number(profile.best_roll_points||0),rollRarity:profile.best_roll_rarity}:null;
+ currentUser=profile.username;
+ renderCollection();renderHistory();updateStats();
+ try{renderPlayers(await GameAPI.players())}catch(e){renderPlayers({players:[]})}
 }
-function saveUserData(){
- const accounts=getAccounts(); accounts[currentUser]=state; setAccounts(accounts);
+
+async function startOnline(payload){
+ await loadRemoteState(payload);
+ $("username").textContent=currentUser;
+ $("authOverlay").classList.add("hidden");$("app").classList.remove("hidden");
+ sessionReady=true;
 }
-let state=null;
-$("authBtn").onclick=()=>{
- const u=$("authUser").value.trim(), p=$("authPass").value;
- if(!/^[A-Za-z0-9_ -]{3,20}$/.test(u)) return $("authErr").textContent="Username must be 3-20 characters.";
- if(p.length<4) return $("authErr").textContent="Password must be at least 4 characters.";
- const accounts=getAccounts();
- if(loginMode==="register"){
-   if(accounts[u]) return $("authErr").textContent="That username already exists.";
-   accounts[u]={password:p,points:0,rolls:0,found:{},history:[],bio:"",bestRoll:null,autoRoll:false,createdAt:Date.now()};setAccounts(accounts);
- }else{
-   if(!accounts[u] || accounts[u].password!==p) return $("authErr").textContent="Incorrect username or password.";
- }
- startGame(u);
+
+$("authBtn").onclick=async()=>{
+ const u=$("authUser").value.trim(),p=$("authPass").value;
+ if(!/^[A-Za-z0-9_ -]{3,20}$/.test(u))return $("authErr").textContent="Username must be 3-20 characters.";
+ if(p.length<4)return $("authErr").textContent="Password must be at least 4 characters.";
+ $("authBtn").disabled=true;$("authErr").textContent="Connecting...";
+ try{
+   const result=loginMode==="register"?await GameAPI.register(u,p):await GameAPI.login(u,p);
+   await startOnline({profile:{...result.profile,badges:result.badges||[]},history:result.history||[]});
+ }catch(e){$("authErr").textContent=e.message||"Unable to connect.";$("authBtn").disabled=false;return;}
+ $("authBtn").disabled=false;
 };
-$("logout").onclick=()=>{currentUser=null;state=null;openAuth("login");};
 
-function startGame(user){
- currentUser=user; state=loadUserData(user);
- $("username").textContent=user;$("authOverlay").classList.add("hidden");$("app").classList.remove("hidden");
- renderCollection();renderHistory();updateStats();renderPlayers();
+$("logout").onclick=async()=>{try{await GameAPI.logout()}catch{} currentUser=null;state=null;sessionReady=false;openAuth("login");};
+
+async function getFreshState(){
+ const me=await GameAPI.me();
+ await loadRemoteState({profile:{...me.profile,badges:me.badges||[]},history:me.history||[]});
 }
 
-function getBestRoll(){
- if(!state.bestRoll && state.history){
-   for(const x of state.history){
-     if(!state.bestRoll || (x.points||0)>(state.bestRoll.points||0)) state.bestRoll=x;
-   }
- }
- return state.bestRoll;
-}
+function getBestRoll(){return state?.bestRoll||null;}
 function renderProfile(){
+ if(!state)return;
  const best=getBestRoll();
  $("profileUsername").textContent=currentUser;
  $("profileBio").textContent=state.bio||"No bio yet.";
  $("bioInput").value=state.bio||"";
- $("profilePoints").textContent=state.points.toLocaleString();
- $("profileRolls").textContent=state.rolls.toLocaleString();
- $("profileBadges").textContent=Object.keys(state.found).length;
+ $("profilePoints").textContent=Number(state.points||0).toLocaleString();
+ $("profileRolls").textContent=Number(state.rolls||0).toLocaleString();
+ $("profileBadges").textContent=Object.keys(state.found||{}).length;
  $("bestRollFormation").textContent=best?.s||"—";
- $("bestRollInfo").textContent=best?`${best.points.toLocaleString()} points${best.names?.length?` • ${best.names.join(", ")}`:""}`:"No best roll yet.";
- $("profileBadgesGrid").innerHTML=BADGES.map(b=>`<div class="badge ${state.found[b.id]?'':'locked'}"><div class="name">${state.found[b.id]?'🏅':'🔒'} ${b.name}</div><div class="rarity ${b.rarity}">${b.chance} • ${b.points.toLocaleString()} pts</div></div>`).join("");
- $("autoRollToggle").disabled=state.points<10000;
- $("autoRollToggle").checked=!!state.autoRoll && state.points>=10000;
- $("autoRollText").textContent=state.points>=10000?(state.autoRoll?"Enabled — the game keeps rolling automatically.":"Unlocked — toggle to enable."):"Unlocks at 10,000 points ("+state.points.toLocaleString()+"/10,000).";
+ $("bestRollInfo").textContent=best?`${Number(best.points||0).toLocaleString()} points${best.rollRarity?` • ${best.rollRarity.toUpperCase()}`:""}`:"No best roll yet.";
+ $("profileBadgesGrid").innerHTML=BADGES.map(b=>`<div class="badge ${state.found?.[b.id]?'':'locked'}"><div class="name">${state.found?.[b.id]?'🏅':'🔒'} ${b.name}</div><div class="rarity ${b.rarity}">${b.chance} • ${b.points.toLocaleString()} pts</div></div>`).join("");
+ $("autoRollToggle").disabled=Number(state.points||0)<10000;
+ $("autoRollToggle").checked=!!state.auto_roll && Number(state.points||0)>=10000;
+ $("autoRollText").textContent=Number(state.points||0)>=10000?(state.auto_roll?"Enabled — the game keeps rolling automatically.":"Unlocked — toggle to enable."):"Unlocks at 10,000 points ("+Number(state.points||0).toLocaleString()+"/10,000).";
 }
-function renderPlayers(){
- const accounts=getAccounts();
- const users=Object.keys(accounts).sort((a,b)=>{
-   const ap=accounts[a]?.points||0,bp=accounts[b]?.points||0;
-   return bp-ap||a.localeCompare(b);
- });
- $("playersGrid").innerHTML=users.length?users.map(u=>{
-   const d=accounts[u],best=d.bestRoll||null;
-   return `<div class="userCard" data-user="${u.replace(/"/g,"&quot;")}">
-     <div style="font-weight:900;font-size:18px">👤 ${u}</div>
-     <div class="muted">${(d.points||0).toLocaleString()} points • ${Object.keys(d.found||{}).length} badges</div>
-     <div style="margin-top:7px">${best?`Best: <b>${best.s}</b> (${best.points.toLocaleString()} pts)`:"No rolls yet."}</div>
-   </div>`;
- }).join(""):"<div class='notice'>No players found.</div>";
+
+async function renderPlayers(remote=null){
+ const result=remote||await GameAPI.players();
+ const users=result.players||[];
+ $("playersGrid").innerHTML=users.length?users.map(d=>`<div class="userCard" data-user="${String(d.username).replace(/"/g,'&quot;')}"><div style="font-weight:900;font-size:18px">👤 ${d.username}</div><div class="muted">${Number(d.points||0).toLocaleString()} points</div><div style="margin-top:7px">${d.best_roll?`Best: <b>${d.best_roll}</b> (${Number(d.best_roll_points||0).toLocaleString()} pts)`:`No rolls yet.`}</div></div>`).join(""):"<div class='notice'>No players found.</div>";
  document.querySelectorAll(".userCard").forEach(card=>card.onclick=()=>showPublicProfile(card.dataset.user));
 }
-function showPublicProfile(user){
- const accounts=getAccounts(),d=accounts[user]; if(!d)return;
- $("publicProfile").classList.remove("hidden");
- $("publicName").textContent=user;
- $("publicBio").textContent=d.bio||"No bio yet.";
- $("publicPoints").textContent=(d.points||0).toLocaleString();
- $("publicRolls").textContent=(d.rolls||0).toLocaleString();
- $("publicBadges").textContent=Object.keys(d.found||{}).length;
- $("publicBest").textContent=d.bestRoll?.s||"—";
- $("publicBestInfo").textContent=d.bestRoll?`${d.bestRoll.points.toLocaleString()} points${d.bestRoll.names?.length?` • ${d.bestRoll.names.join(", ")}`:""}`:"No best roll yet.";
- $("publicBadgesGrid").innerHTML=BADGES.map(b=>`<div class="badge ${d.found?.[b.id]?'':'locked'}"><div class="name">${d.found?.[b.id]?'🏅':'🔒'} ${b.name}</div><div class="rarity ${b.rarity}">${b.chance}</div></div>`).join("");
+async function showPublicProfile(user){
+ try{
+  const result=await GameAPI.player(user),d=result.profile;
+  $("publicProfile").classList.remove("hidden");
+  $("publicName").textContent=d.username;$("publicBio").textContent=d.bio||"No bio yet.";
+  $("publicPoints").textContent=Number(d.points||0).toLocaleString();$("publicRolls").textContent=Number(d.rolls||0).toLocaleString();$("publicBadges").textContent=(d.badges||[]).length;
+  $("publicBest").textContent=d.best_roll||"—";$("publicBestInfo").textContent=d.best_roll?`${Number(d.best_roll_points||0).toLocaleString()} points${d.best_roll_rarity?` • ${d.best_roll_rarity.toUpperCase()}`:""}`:"No best roll yet.";
+  const unlocked=new Set((d.badges||[]).map(b=>b.badge_id));
+  $("publicBadgesGrid").innerHTML=BADGES.map(b=>`<div class="badge ${unlocked.has(b.id)?'':'locked'}"><div class="name">${unlocked.has(b.id)?'🏅':'🔒'} ${b.name}</div><div class="rarity ${b.rarity}">${b.chance}</div></div>`).join("");
+ }catch(e){alert(e.message)}
 }
+
 function updateStats(){$("points").textContent=state.points.toLocaleString();$("rolls").textContent=state.rolls;$("found").textContent=Object.keys(state.found).length+"/"+BADGES.length;renderProfile();}
 function counts(s){return [...s].reduce((o,c)=>(o[c]=(o[c]||0)+1,o),{})}
 function rollMutation(){
@@ -408,83 +403,64 @@ function renderCollection(){
  updateStats();
 }
 function renderHistory(){
- $("historyLog").innerHTML=state.history.length?state.history.slice().reverse().map(x=>`<div class="logrow"><b>${x.s}</b> — ${x.names.length?x.names.join(", "):"Nothing found"}${x.mutations?.some(m=>m!=="normal")?` <span style="color:#22f5ff">[${x.mutations.filter(m=>m!=="normal").join(", ")}]</span>`:""}${x.points?` <span style="color:#fbbf24">(+${x.points})</span>`:""}</div>`).join(""):"<div class='notice'>No rolls yet.</div>";
+ const items=state?.history||[];
+ $("historyLog").innerHTML=items.length?items.slice().reverse().map(x=>`<div class="logrow"><b>${x.letters||x.s||""}</b> — ${x.badges?.length?x.badges.join(", "):x.names?.length?x.names.join(", "):"Nothing found"}${x.roll_rarity||x.rollRarity?` <span class="rarity-${x.roll_rarity||x.rollRarity}">[${String(x.roll_rarity||x.rollRarity).toUpperCase()}]</span>`:""}${x.points?` <span style="color:#fbbf24">(+${Number(x.points).toLocaleString()})</span>`:""}</div>`).join(""):"<div class='notice'>No rolls yet.</div>";
 }
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 async function roll(){
- const btn=$("rollBtn");if(btn.disabled)return;btn.disabled=true;
+ const btn=$("rollBtn");if(btn.disabled||!sessionReady)return;btn.disabled=true;
  $("findings").innerHTML="";$("notice").textContent="🎲 Rolling... focus...";$("letters").innerHTML="";$("rollRarity").classList.add("rolling");
- $("letters").innerHTML="";
- // Roll length probabilities: 6 = 65%, 5 = 16%, 4 = 9%, 3 = 6%, 2 = 3%, 1 = 1%.
- const lengthRoll=Math.random();
- let rollLength;
- if(lengthRoll<0.01) rollLength=1;
- else if(lengthRoll<0.04) rollLength=2;
- else if(lengthRoll<0.10) rollLength=3;
- else if(lengthRoll<0.19) rollLength=4;
- else if(lengthRoll<0.35) rollLength=5;
- else rollLength=6;
-
- $("notice").textContent="🎲 Rolling...";
- await sleep(750);
-
- const lettersData=[...Array(rollLength)].map(()=>({
-   char:String.fromCharCode(65+Math.floor(Math.random()*26)),
-   mutation:rollMutation()
- }));
- const arr=lettersData.map(x=>x.char);
- for(let i=0;i<rollLength;i++){
-   await sleep(650);
-   const d=document.createElement("div");
-   d.className="letter reveal";
-   if(lettersData[i].mutation!=="normal"){
-     d.classList.add("mutation-"+lettersData[i].mutation);
-     d.innerHTML=`${lettersData[i].char}<div class="mutation-tag">${lettersData[i].mutation.toUpperCase()}</div>`;
-   } else d.textContent=lettersData[i].char;
-   $("letters").appendChild(d);
-   if(i<rollLength-1) await sleep(250);
- }
- await sleep(900);
- const s=arr.join("");
- const mutationKinds=lettersData.map(x=>x.mutation);
- const mutationIds=mutationBadgeIds(mutationKinds);
- const ids=[...new Set([...check(s),...mutationIds])];
- const names=ids.map(id=>BADGES.find(b=>b.id===id).name),pts=rarityWeight(ids); const rollRarity=getRollRarity(pts,ids);
- ids.forEach(id=>{if(!state.found[id])state.found[id]=1;});
- state.points+=pts;state.rolls++;
- state.history.push({s,names,points:pts,mutations:mutationKinds,rollRarity:rollRarity.id});
- if(state.history.length>100)state.history.shift();
- if(!state.bestRoll || pts>(state.bestRoll.points||0)) state.bestRoll={s,names,points:pts,mutations:mutationKinds,rollRarity:rollRarity.id};
- saveUserData();
- [...$("letters").children].forEach(e=>e.classList.add("glow"));
- renderRollRarity(rollRarity); $("rollRarity").classList.remove("rolling");
- const mutationCount=mutationKinds.filter(m=>m!=="normal").length;
- const mutationText=mutationCount?` 💥 ${mutationCount} mutation${mutationCount>1?"s":""}!`:"";
- if(names.length){
-   $("notice").innerHTML=`✨ <b>${names.length} pattern${names.length>1?"s":""} found!</b>${mutationText} &nbsp; <span style="color:#fbbf24">+${pts.toLocaleString()} points</span>`;
-   $("findings").innerHTML=ids.map(id=>{let b=BADGES.find(x=>x.id===id);return `<div class="badge new"><div class="name">🏅 ${b.name}</div><div class="rarity ${b.rarity}">${b.chance}</div><div class="desc">${b.desc}</div><div class="pts">+${b.points.toLocaleString()} points</div></div>`}).join("");
- }else $("notice").textContent=mutationCount?`💥 Mutation detected!`:"Nothing special... maybe the next roll is the one.";
- renderCollection();renderHistory();renderPlayers();btn.disabled=false;
- if(state.autoRoll && state.points>=10000) setTimeout(()=>{if(!btn.disabled)roll()},700);
+ try{
+   const result=await GameAPI.roll();
+   const letters=result.letters||[...String(result.formation||"")];
+   // Server decides the roll. Client only animates and displays it.
+   const revealDelay=650;
+   for(let i=0;i<letters.length;i++){
+     await sleep(revealDelay);
+     const d=document.createElement("div");d.className="letter reveal";d.textContent=letters[i];
+     const mut=result.mutations?.[i]||"normal";
+     if(mut!=="normal"){d.classList.add("mutation-"+mut);d.innerHTML=`${letters[i]}<div class="mutation-tag">${mut.toUpperCase()}</div>`;}
+     $("letters").appendChild(d);
+     if(i<letters.length-1)await sleep(250);
+   }
+   await sleep(700);
+   result.badges=(result.badges||[]);
+   $("rollRarity").classList.remove("rolling");
+   renderRollRarity({id:result.rollRarity,name:result.rollRarity.toUpperCase(),band:result.rollRarityBand});
+   result.badges.forEach(id=>state.found[id]=1);
+   state.points=Number(result.totalPoints);state.rolls=Number(result.totalRolls);
+   if(result.bestRoll)state.bestRoll={s:result.formation,points:result.points,rollRarity:result.rollRarity};
+   const names=result.badges.map(id=>BADGES.find(b=>b.id===id)?.name).filter(Boolean);
+   const mutationCount=(result.mutations||[]).filter(m=>m!=="normal").length;
+   const mutationText=mutationCount?` 💥 ${mutationCount} mutation${mutationCount>1?"s":""}!`:"";
+   if(names.length){
+     $("notice").innerHTML=`✨ <b>${names.length} pattern${names.length>1?"s":""} found!</b>${mutationText} &nbsp; <span style="color:#fbbf24">+${Number(result.points).toLocaleString()} points</span>`;
+     $("findings").innerHTML=names.map(name=>{let b=BADGES.find(x=>x.name===name);return b?`<div class="badge new"><div class="name">🏅 ${b.name}</div><div class="rarity ${b.rarity}">${b.chance}</div><div class="desc">${b.desc}</div><div class="pts">+${b.points.toLocaleString()} points</div></div>`:""}).join("");
+   }else $("notice").textContent=mutationCount?"💥 Mutation detected!":"Nothing special... maybe the next roll is the one.";
+   renderCollection();renderHistory();renderPlayers();
+   if(state.auto_roll&&Number(state.points)>=10000)setTimeout(()=>{if(!btn.disabled)roll()},700);
+ }catch(e){
+   $("rollRarity").classList.remove("rolling");$("notice").textContent=e.message||"The server could not complete the roll.";
+ }finally{btn.disabled=false;}
 }
 $("rollBtn").onclick=roll;
 document.addEventListener("keydown",e=>{if($("app").classList.contains("hidden"))return;if((e.code==="Space"||e.key.toLowerCase()==="r")&&!$("rollBtn").disabled){e.preventDefault();roll()}});
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.tab).classList.add("active")});
 
 $("editBioBtn").onclick=()=>{$("bioInput").classList.remove("hidden");$("saveBioBtn").classList.remove("hidden");$("editBioBtn").classList.add("hidden");$("bioInput").focus()};
-$("saveBioBtn").onclick=()=>{
- state.bio=$("bioInput").value.trim().slice(0,240);
- saveUserData();
+$("saveBioBtn").onclick=async()=>{
+ try{const r=await GameAPI.updateProfile({bio:$("bioInput").value.trim().slice(0,240)});state.bio=r.profile.bio;}catch(e){alert(e.message)}
  $("bioInput").classList.add("hidden");$("saveBioBtn").classList.add("hidden");$("editBioBtn").classList.remove("hidden");
  renderProfile();renderPlayers();
 };
-$("autoRollToggle").onchange=()=>{
- if(state.points<10000){$("autoRollToggle").checked=false;return}
- state.autoRoll=$("autoRollToggle").checked;
- saveUserData();renderProfile();
- if(state.autoRoll&&!$("rollBtn").disabled) setTimeout(()=>roll(),300);
+$("autoRollToggle").onchange=async()=>{
+ if(Number(state.points||0)<10000){$("autoRollToggle").checked=false;return}
+ try{const r=await GameAPI.updateProfile({autoRoll:$("autoRollToggle").checked});state.auto_roll=r.profile.auto_roll;renderProfile();if(state.auto_roll&&!$("rollBtn").disabled)setTimeout(()=>roll(),300)}catch(e){alert(e.message);$("autoRollToggle").checked=!!state.auto_roll;}
 };
-openAuth("register");
+(async function boot(){
+ try{const me=await GameAPI.me();await startOnline({profile:{...me.profile,badges:me.badges||[]},history:me.history||[]});}
+ catch{openAuth("register");}
+})();
 </script>
 </body>
 </html>
