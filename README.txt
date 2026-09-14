@@ -10,5 +10,4 @@ New:
 - Slow letter reveal for suspense :)
 - Points, rolls, badges and history persist per account
 
-Important:
-This is a simple offline account system, not a secure online authentication system. Passwords are stored locally in the browser because the game has no server.
+Game has servers now!
