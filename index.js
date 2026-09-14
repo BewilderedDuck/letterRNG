@@ -1,319 +1,46 @@
-const CORS_HEADERS = {
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-};
-
-const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), {
-  status,
-  headers: { 'Content-Type': 'application/json', ...CORS_HEADERS, ...extra },
-});
-
-function cors(env, request) {
-  const origin = request.headers.get('Origin');
-  const allowed = env.ALLOWED_ORIGIN || '';
-  const headers = { ...CORS_HEADERS, Vary: 'Origin' };
-  if (allowed === '*' || origin === allowed) {
-    headers['Access-Control-Allow-Origin'] = origin || allowed || '*';
-    headers['Access-Control-Allow-Credentials'] = 'true';
-  }
-  return headers;
-}
-
-function response(data, status, env, request, extra = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...cors(env, request), ...extra },
-  });
-}
-
-const internalEmail = (username) => `${username.toLowerCase()}@letter-rng.internal`;
-const usernameRe = /^[A-Za-z0-9_ -]{3,20}$/;
-
-async function sb(env, path, options = {}) {
-  const res = await fetch(`${env.SUPABASE_URL}${path}`, {
-    ...options,
-    headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-  });
-  const text = await res.text();
-  let data;
-  try { data = JSON.parse(text); } catch { data = text; }
-  return { res, data };
-}
-
-async function authUser(env, token) {
-  if (!token) return null;
-  const r = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
-    headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!r.ok) return null;
-  return r.json();
-}
-
-function getCookie(request, name) {
-  const cookies = request.headers.get('Cookie') || '';
-  for (const part of cookies.split(';')) {
-    const [k, ...v] = part.trim().split('=');
-    if (k === name) return decodeURIComponent(v.join('='));
-  }
-  return null;
-}
-
-const sessionCookie = (token, maxAge = 60 * 60 * 24 * 30) =>
-  `lr_session=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=None`;
-
-const clearCookie = 'lr_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None';
-
-async function currentSession(env, request) {
-  const token = getCookie(request, 'lr_session');
-  if (!token) return null;
-  const user = await authUser(env, token);
-  if (!user) return null;
-  const profile = await getProfile(env, user.id);
-  return { token, user, profile };
-}
-
-async function getProfile(env, userId) {
-  const q = encodeURIComponent(userId);
-  const r = await sb(env, `/rest/v1/profiles?id=eq.${q}&select=*`);
-  return r.data?.[0] || null;
-}
-
-async function getBadgesForUser(env, userId) {
-  const q = encodeURIComponent(userId);
-  const r = await sb(env, `/rest/v1/user_badges?user_id=eq.${q}&select=badge_id,unlocked_at&order=unlocked_at.asc`);
-  return r.data || [];
-}
-
-async function getHistoryForUser(env, userId) {
-  const q = encodeURIComponent(userId);
-  const r = await sb(env, `/rest/v1/rolls?user_id=eq.${q}&select=id,letters,roll_rarity,points,mutations,badges,created_at&order=created_at.desc&limit=100`);
-  return r.data || [];
-}
-
-async function findProfileByUsername(env, username) {
-  const q = encodeURIComponent(username);
-  return sb(env, `/rest/v1/profiles?username=eq.${q}&select=*`);
-}
-
-async function updateProfile(env, userId, patch) {
-  const q = encodeURIComponent(userId);
-  return sb(env, `/rest/v1/profiles?id=eq.${q}`, {
-    method: 'PATCH',
-    headers: { Prefer: 'return=representation' },
-    body: JSON.stringify(patch),
-  });
-}
-
-// ---------------- WORD DATA ----------------
-const TWO = new Set('am an as at be by do go he if in is it me my no of oh on or so to up us we ax ex ox'.split(' '));
-const THREE = new Set('ace act add age air all and ant any ape arm art ate bad bag ban bar bat bed bee bet big bit box boy bud bus buy can car cat cow cry cup cut day did dog dot dry ear eat egg end eye far fat few fig fin fit fox fun get god got hat hen her him his hot how ice ink jam jar job joy key kid leg let lie lip log lot low man map may men mix mom mud net new nod not now nut oak off oil old one out owl own pan pay pen pet pie pig pin pop pot red run sad sea see set she sit six sky son sun tap tea ten the tie tin top toy try two use van war way web wet win won yes you zoo'.split(' '));
-const FOUR = new Set('able acid also area away baby back ball bank base bear beat best blue boat book cake call calm came camp card care city club cold come cool door down draw drop each easy edge else even ever face fact fair fall farm fast fear feel file fill find fire fish five food foot free from game gave girl give glad gold good hand hard head help here high home hope idea into jump just keep kind king knew know lake land last late lead life like line list long look made make many mark mean meet mile mind more most move name near need next nice open over page pair part path play race read real road room same save ship shop show side snow some song soon star stay step stop take talk team tell than that them then they this time tiny tree true turn used very walk wall want warm wave well went were what when will wind wish with word work year your'.split(' '));
-const FIVE = new Set('about after again apple beach black brain bread bring brown build chair class clean clear clock close cloud dance dream earth early every field first floor found front fruit great green group house human light maybe money music never night ocean other paper plant point power quick right river round school short sleep small smile space sport stand start stone story thing three throw today water white whole world write young'.split(' '));
-const SIX = new Set('almost animal banana basket battle better button castle cherry circle coffee cookie dragon dreams friend garden hammer jungle kitten letter little london mango market mirror monkey mother orange people planet player purple rabbit random rocket school secret silver simple soccer summer tetris turtle winter wizard'.split(' '));
-const VOWELS = new Set(['A','E','I','O','U']);
-
-const BADGES = {
-  twoletterword: ['TWO LETTER WORD','common',15], threeletterword:['THREE LETTER WORD','uncommon',40],
-  fourletterword:['FOUR LETTER WORD','rare',120], fiveletterword:['FIVE LETTER WORD','epic',400], sixletterword:['SIX LETTER WORD','legendary',1500],
-  doubleword:['DOUBLE WORD','rare',200], wordmirror:['WORD MIRROR','epic',700], wordchain:['WORD CHAIN','legendary',2200],
-  vowelpair:['VOWEL PAIR','uncommon',25], consonantrun:['CONSONANT RUN','rare',80],
-  uncommonmutation:['UNCOMMON MUTATION','uncommon',35], raremutation:['RARE MUTATION','rare',90], neonmutation:['NEON MUTATION','rare',125],
-  epicmutation:['EPIC MUTATION','epic',500], mythicmutation:['MYTHIC MUTATION','mythic',5000], rainbowmutation:['RAINBOW MUTATION','rainbow',25000],
-  catastrophicmutation:['CATASTROPHIC MUTATION','catastrophic',1000000], doublemutation:['DOUBLE MUTATION','epic',750], mutationrain:['MUTATION RAIN','legendary',2500],
-};
-
-function rollMutation() {
-  const r = Math.random();
-  if (r < 0.000005) return 'catastrophic';
-  if (r < 0.000205) return 'rainbow';
-  if (r < 0.002205) return 'mythic';
-  if (r < 0.010205) return 'epic';
-  if (r < 0.030205) return 'neon';
-  if (r < 0.080205) return 'rare';
-  if (r < 0.230205) return 'uncommon';
-  return 'normal';
-}
-
-function findWords(s) {
-  const low = s.toLowerCase(), found = [];
-  const sets = [[TWO,2],[THREE,3],[FOUR,4],[FIVE,5],[SIX,6]];
-  for (let i=0;i<low.length;i++) for (const [set,len] of sets) {
-    if (i+len <= low.length) { const word=low.slice(i,i+len); if(set.has(word)) found.push({word,start:i,len}); }
-  }
-  return found;
-}
-
-function checkPatterns(s) {
-  const len=s.length, c={}; for(const ch of s)c[ch]=(c[ch]||0)+1;
-  const vals=Object.values(c), ids=[];
-  const words=findWords(s);
-  if(words.some(w=>w.len===2))ids.push('twoletterword');
-  if(words.some(w=>w.len===3))ids.push('threeletterword');
-  if(words.some(w=>w.len===4))ids.push('fourletterword');
-  if(words.some(w=>w.len===5))ids.push('fiveletterword');
-  if(words.some(w=>w.len===6))ids.push('sixletterword');
-  if(words.length>=2)ids.push('doubleword');
-  if(words.some((a,i)=>words.some((b,j)=>j>i && a.start!==b.start && a.word===b.word.split('').reverse().join(''))))ids.push('wordmirror');
-  if(new Set(words.map(w=>w.start)).size>=2)ids.push('wordchain');
-  if(/^[A-Z]*[AEIOU]{2}/.test(s)||/[AEIOU]{2}/.test(s))ids.push('vowelpair');
-  if(/[B-DF-HJ-NP-TV-Z]{4,}/.test(s))ids.push('consonantrun');
-  if(new Set(s).size===len)ids.push('unique');
-  if(len>=2 && s[0]===s[len-1])ids.push('firstlast');
-  if(vals.filter(v=>v===2).length>=2)ids.push('doublepair');
-  if(s===s.split('').reverse().join(''))ids.push('pal');
-  if(len===6 && s.slice(0,3)===s.slice(3).split('').reverse().join(''))ids.push('mirror');
-  let asc=len>=2, desc=len>=2; for(let i=1;i<len;i++){if(s.charCodeAt(i)!==s.charCodeAt(i-1)+1)asc=false;if(s.charCodeAt(i)!==s.charCodeAt(i-1)-1)desc=false;}
-  if(asc)ids.push('alphabet'); if(desc)ids.push('reversealpha');
-  if(len>=2 && new Set([s[0],s[1]]).size===2 && [...s].every((x,i)=>x===s[i%2]))ids.push('alternating');
-  if(vals.includes(6))ids.push('same'); if(vals.includes(5))ids.push('five'); if(vals.includes(4))ids.push('four'); if(vals.includes(3))ids.push('triple'); if(vals.includes(2))ids.push('double');
-  if([...s].filter(x=>VOWELS.has(x)).length>=4)ids.push('vowels'); if([...s].every(x=>!VOWELS.has(x)))ids.push('novowels');
-  return [...new Set(ids)];
-}
-
-const RARITIES=[
- {id:'catastrophic',name:'CATASTROPHIC',band:'Top 0.1%',min:100000},
- {id:'rainbow',name:'RAINBOW',band:'Top 0.1%–3%',min:15000},
- {id:'mythic',name:'MYTHIC',band:'Top 3%',min:2000},
- {id:'legendary',name:'LEGENDARY',band:'Top 10%',min:600},
- {id:'epic',name:'EPIC',band:'Top 20%',min:180},
- {id:'rare',name:'RARE',band:'Top 40%',min:60},
- {id:'uncommon',name:'UNCOMMON',band:'20%–40%',min:20},
- {id:'common',name:'COMMON',band:'Bottom 20%',min:0},
+const ORIGIN = 'https://bewilderedduck.github.io';
+const USERNAME_RE = /^[A-Za-z0-9_\-]{3,20}$/;
+const ROLL_LENGTHS = [{n:6,p:0.65},{n:5,p:0.16},{n:4,p:0.09},{n:3,p:0.06},{n:2,p:0.03},{n:1,p:0.01}];
+const MUTS = [{name:'catastrophic',p:0.000005},{name:'rainbow',p:0.0002},{name:'mythic',p:0.002},{name:'epic',p:0.008},{name:'neon',p:0.02},{name:'rare',p:0.05},{name:'uncommon',p:0.15},{name:'normal',p:0.769795}];
+const BADGES = [
+['ONE LETTER ROLL','Roll exactly one letter.','Uncommon',30],['TWO LETTER ROLL','Roll exactly two letters.','Uncommon',35],['THREE LETTER ROLL','Roll exactly three letters.','Rare',45],['FOUR LETTER ROLL','Roll exactly four letters.','Rare',60],['FIVE LETTER ROLL','Roll exactly five letters.','Epic',90],['SIX LETTER ROLL','Roll six letters.','Common',20],
+['TWO LETTER WORD','Get a 2-letter English word.','Rare',75],['THREE LETTER WORD','Get a 3-letter English word.','Rare',100],['FOUR LETTER WORD','Get a 4-letter English word.','Epic',160],['FIVE LETTER WORD','Get a 5-letter English word.','Legendary',260],['SIX LETTER WORD','Get a 6-letter English word.','Mythic',450],
+['DOUBLE WORD','Two adjacent valid words.','Epic',220],['WORD MIRROR','A word mirrored by another word.','Legendary',350],['WORD CHAIN','Two or more adjacent words.','Mythic',500],['VOWEL PAIR','Two vowels appear together.','Uncommon',40],['CONSONANT RUN','Four or more consonants in a row.','Rare',80],
+['UNCOMMON MUTATION','Get an uncommon mutation.','Uncommon',50],['RARE MUTATION','Get a rare mutation.','Rare',100],['NEON MUTATION','Get a neon mutation.','Epic',160],['EPIC MUTATION','Get an epic mutation.','Legendary',260],['MYTHIC MUTATION','Get a mythic mutation.','Mythic',500],['RAINBOW MUTATION','Get a rainbow mutation.','Rainbow',1200],['CATASTROPHIC MUTATION','Get a catastrophic mutation.','Catastrophic',5000],['DOUBLE MUTATION','Get at least two mutated letters.','Epic',300],['MUTATION RAIN','Get three or more mutated letters.','Legendary',650],
 ];
-function rarity(points, ids) {
-  const wordIds=new Set(['twoletterword','threeletterword','fourletterword','fiveletterword','sixletterword','doubleword','wordmirror','wordchain','vowelpair','consonantrun']);
-  let score=points; for(const id of ids)if(wordIds.has(id))score+=75;
-  if(ids.includes('catastrophicmutation'))score=Math.max(score,1000000);
-  else if(ids.includes('rainbowmutation'))score=Math.max(score,25000);
-  return RARITIES.find(r=>score>=r.min) || RARITIES.at(-1);
-}
-
-function mutationBadgeIds(muts){
-  const ids=[]; const types=new Set(muts);
-  if(types.has('uncommon'))ids.push('uncommonmutation'); if(types.has('rare'))ids.push('raremutation'); if(types.has('neon'))ids.push('neonmutation');
-  if(types.has('epic'))ids.push('epicmutation'); if(types.has('mythic'))ids.push('mythicmutation'); if(types.has('rainbow'))ids.push('rainbowmutation'); if(types.has('catastrophic'))ids.push('catastrophicmutation');
-  const n=muts.filter(x=>x!=='normal').length; if(n>=2)ids.push('doublemutation'); if(n>=3)ids.push('mutationrain'); return ids;
-}
-
-function pointsFor(ids){return ids.reduce((n,id)=>n+(BADGES[id]?.[2]||0),0);}
-
-function performRoll(){
-  const r=Math.random(); let len; if(r<.01)len=1; else if(r<.04)len=2; else if(r<.10)len=3; else if(r<.19)len=4; else if(r<.35)len=5; else len=6;
-  const letters=[], mutations=[];
-  for(let i=0;i<len;i++){letters.push(String.fromCharCode(65+Math.floor(Math.random()*26))); mutations.push(rollMutation());}
-  const formation=letters.join(''), ids=[...checkPatterns(formation),...mutationBadgeIds(mutations)];
-  const unique=[...new Set(ids)], points=pointsFor(unique), rr=rarity(points,unique);
-  return {letters,formation,mutations, badges:unique,points,rollRarity:rr.id,rollRarityBand:rr.band};
-}
-
-async function createAuthUser(env, username, password){
-  return sb(env,'/auth/v1/admin/users',{method:'POST',body:JSON.stringify({email:internalEmail(username),password,email_confirm:true,user_metadata:{username}})});
-}
-async function loginAuthUser(env, username, password){
-  return sb(env,'/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email:internalEmail(username),password})});
-}
-
-async function register(env, request){
-  const b=await request.json(); const username=String(b.username||'').trim(),password=String(b.password||'');
-  if(!usernameRe.test(username))return response({error:'Username must be 3-20 characters.'},400,env,request);
-  if(password.length<4)return response({error:'Password must be at least 4 characters.'},400,env,request);
-  const existing=await findProfileByUsername(env,username);
-  if(existing.data?.length)return response({error:'That username is already taken.'},409,env,request);
-  const made=await createAuthUser(env,username,password);
-  if(!made.res.ok)return response({error:made.data?.msg||'Unable to create account.'},400,env,request);
-  const user=made.data.user;
-  // Trigger creates profile. Ensure it exists before returning.
-  let profile=await getProfile(env,user.id);
-  if(!profile){
-    const p=await sb(env,'/rest/v1/profiles',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({id:user.id,username})});
-    profile=p.data?.[0]||null;
-  }
-  const logged=await loginAuthUser(env,username,password);
-  if(!logged.res.ok)return response({error:'Account created. Please log in.'},201,env,request);
-  const badges=await getBadgesForUser(env,user.id);
-  const history=await getHistoryForUser(env,user.id);
-  return response({user:{id:user.id,username},profile, badges, history, session:{expires_at:logged.data.expires_at}},200,env,request,{'Set-Cookie':sessionCookie(logged.data.access_token)});
-}
-
-async function login(env, request){
-  const b=await request.json(); const username=String(b.username||'').trim(),password=String(b.password||'');
-  if(!usernameRe.test(username)||!password)return response({error:'Incorrect username or password.'},401,env,request);
-  const logged=await loginAuthUser(env,username,password);
-  if(!logged.res.ok)return response({error:'Incorrect username or password.'},401,env,request);
-  const user=logged.data.user, profile=await getProfile(env,user.id);
-  const badges=await getBadgesForUser(env,user.id);
-  const history=await getHistoryForUser(env,user.id);
-  return response({user:{id:user.id,username:profile?.username||username},profile,badges,history,session:{expires_at:logged.data.expires_at}},200,env,request,{'Set-Cookie':sessionCookie(logged.data.access_token)});
-}
-
-async function handleRoll(env, request){
-  const session=await currentSession(env,request); if(!session?.profile)return response({error:'Not authenticated.'},401,env,request);
-  const roll=performRoll();
-  const existingBadgeRows=(await sb(env,`/rest/v1/user_badges?user_id=eq.${encodeURIComponent(session.user.id)}&select=badge_id`)).data||[];
-  const existingBadges=new Set(existingBadgeRows.map(x=>x.badge_id));
-  const newBadges=roll.badges.filter(id=>!existingBadges.has(id));
-  const newPoints=roll.points;
-  const oldPoints=Number(session.profile.points||0), newTotal=oldPoints+newPoints;
-  const oldBest=Number(session.profile.best_roll_points||0);
-  const bestPatch=newPoints>oldBest?{best_roll:roll.formation,best_roll_points:newPoints,best_roll_rarity:roll.rollRarity}:{};
-  const profilePatch={points:newTotal,rolls:Number(session.profile.rolls||0)+1,...bestPatch};
-  const pr=await updateProfile(env,session.user.id,profilePatch);
-  if(!pr.res.ok)return response({error:'Could not save roll.'},500,env,request);
-  const badgesArray=roll.badges;
-  const rr=await sb(env,'/rest/v1/rolls',{method:'POST',body:JSON.stringify({user_id:session.user.id,letters:roll.formation,roll_rarity:roll.rollRarity,points:roll.points,mutations:roll.mutations,badges:badgesArray})});
-  if(!rr.res.ok)return response({error:'Could not save roll history.'},500,env,request);
-  if(newBadges.length){
-    const rows=newBadges.map(badge_id=>({user_id:session.user.id,badge_id}));
-    await sb(env,'/rest/v1/user_badges',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates'},body:JSON.stringify(rows)});
-  }
-  return response({...roll,newBadges,totalPoints:newTotal,totalRolls:profilePatch.rolls,bestRoll:newPoints>oldBest},200,env,request);
-}
-
-async function publicPlayers(env,request){
-  const r=await sb(env,'/rest/v1/profiles?select=id,username,bio,points,rolls,best_roll,best_roll_points,best_roll_rarity,created_at&order=points.desc&limit=100');
-  return response({players:r.data||[]},200,env,request);
-}
-
-async function publicProfile(env,request,username){
-  const r=await findProfileByUsername(env,username); const p=r.data?.[0]; if(!p)return response({error:'Player not found.'},404,env,request);
-  const u=await sb(env,`/rest/v1/user_badges?user_id=eq.${encodeURIComponent(p.id)}&select=badge_id,unlocked_at&order=unlocked_at.asc`);
-  return response({profile:{...p,badges:u.data||[]}},200,env,request);
-}
-
-export default { async fetch(request,env){
-  const url=new URL(request.url);
-  if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors(env,request)});
-  try {
-    if(url.pathname==='/api/auth/register'&&request.method==='POST')return await register(env,request);
-    if(url.pathname==='/api/auth/login'&&request.method==='POST')return await login(env,request);
-    if(url.pathname==='/api/auth/logout'&&request.method==='POST')return response({ok:true},200,env,request,{'Set-Cookie':clearCookie});
-    if(url.pathname==='/api/auth/me'&&request.method==='GET'){
-      const s=await currentSession(env,request); if(!s?.profile)return response({error:'Not authenticated.'},401,env,request);
-      const badges=await getBadgesForUser(env,s.user.id);
-      const history=await getHistoryForUser(env,s.user.id);
-      return response({user:{id:s.user.id,username:s.profile.username},profile:s.profile,badges,history},200,env,request);
-    }
-    if(url.pathname==='/api/roll'&&request.method==='POST')return await handleRoll(env,request);
-    if(url.pathname==='/api/history'&&request.method==='GET'){
-      const s=await currentSession(env,request);if(!s?.profile)return response({error:'Not authenticated.'},401,env,request);
-      return response({history:await getHistoryForUser(env,s.user.id)},200,env,request);
-    }
-    if(url.pathname==='/api/profile'&&request.method==='PATCH'){
-      const s=await currentSession(env,request);if(!s?.profile)return response({error:'Not authenticated.'},401,env,request);
-      const b=await request.json(),bio=typeof b.bio==='string'?b.bio.slice(0,240):undefined,autoRoll=typeof b.autoRoll==='boolean'?b.autoRoll:undefined;
-      const patch={};if(bio!==undefined)patch.bio=bio;if(autoRoll!==undefined)patch.auto_roll=autoRoll;if(!Object.keys(patch).length)return response({error:'Nothing to update.'},400,env,request);
-      const r=await updateProfile(env,s.user.id,patch);return response({profile:r.data?.[0]||null},r.res.ok?200:500,env,request);
-    }
-    if(url.pathname==='/api/players'&&request.method==='GET')return await publicPlayers(env,request);
-    if(url.pathname.startsWith('/api/player/')&&request.method==='GET')return await publicProfile(env,request,decodeURIComponent(url.pathname.slice('/api/player/'.length)));
-    return response({error:'Not found.'},404,env,request);
-  } catch(e){console.error(e);return response({error:'Internal server error.'},500,env,request);}
-} };
+const WORDS2=new Set('am an as at be by do go he if in is it me my no of oh on or ox so to up us we'.split(' '));
+const WORDS3=new Set('ace app ape add and ant any are art bad bag bar bed big bit box boy bug bus can cat cow day did dog dot dry egg end eye far fat few fit fly for fun get got had has hat her him his hot how ice ill ink its jam job joy key kid law lay let lie low man map may men mix mom new not now off old one out own pay pen pet pie pig put red run sad saw say sea see she sit six sky son sun tag tea ten the tie too top toy try two use war was way who why win yes you zoo'.split(' '));
+const WORDS4=new Set('able acid also area army away baby back ball band bank base bath bear beat been best bill bird blue book boom both card care case cash city club cold come cook cool core dark data date dawn deal dear deep desk done door down draw dream drop each easy edge else even ever face fact farm fast feet fell fill find fire fish five food foot four free from full game give glad goal goes gold good great hair half hall hand hard have head hear heat help here high home hope hour idea into iron jump just keep kind king know land last late lead left life like line live long look love made main make many mark meal mean meet mind more most move much must name near need next nice night none note okay once only open over page pair park part past path play plus poor post read real red? road rock room rule same save school seat seen seem sent ship shop show side sing size slow some song soon sort star stay step stop such sure take talk tall team tell than that their them then they thin this time tiny told took town tree trip true turn type upon used user very wall want warm week well went were what when where which while white whoa wide wife will wind wish with wood word work world year your zero'.split(' '));
+const WORDS5=new Set('about above after again among apple beach black bring brown build carry chair class clean clear close count cover daily earth early event every extra field final first floor found front fruit green group happy house human input large laugh learn light little local magic money month music never night north other party phone place plain point power press price quick quiet right river round server short sound south space speak spend sport staff start state still story study table taken thing think those three today touch tower trade train treat trust under union until value video water where which white whole woman world write young'.split(' '));
+const WORDS6=new Set('always animal answer anyone around became before better called camera change choose common create danger decide during enough family father follow friend future going ground happen health island itself letter market matter memory middle mother number office person public random recent record result school second should single system though travel unique update useful versus website wonder words'.split(' '));
+function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Credentials':'true','Cache-Control':'no-store'}})}
+function cors(){return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Credentials':'true','Access-Control-Allow-Methods':'GET,POST,PATCH,OPTIONS','Access-Control-Allow-Headers':'Content-Type','Access-Control-Max-Age':'86400'}})}
+function internalEmail(username){return username.toLowerCase()+'@letter-rng.internal'}
+async function sb(env,path,opts={}){const r=await fetch(env.SUPABASE_URL+path,{...opts,headers:{apikey:env.SUPABASE_SERVICE_ROLE_KEY,Authorization:`Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,...(opts.headers||{})}});const t=await r.text();let d=null;try{d=t?JSON.parse(t):null}catch{d=t}if(!r.ok)throw new Error((d&&d.message)||d?.error_description||d?.error||`Supabase ${r.status}`);return d}
+function cookie(headers,name){const raw=headers.get('Cookie')||'';for(const p of raw.split(';')){const [k,...v]=p.trim().split('=');if(k===name)return decodeURIComponent(v.join('='))}return null}
+function sessionCookie(token){return `letter_rng_session=${encodeURIComponent(token)}; Max-Age=2592000; Path=/; HttpOnly; Secure; SameSite=None`}
+function clearCookie(){return 'letter_rng_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None'}
+async function userFromRequest(request,env){const token=cookie(request.headers,'letter_rng_session');if(!token)return null;try{const auth=await sb(env,'/auth/v1/user',{headers:{Authorization:`Bearer ${token}`}});if(!auth?.id)return null;const rows=await sb(env,`/rest/v1/profiles?id=eq.${encodeURIComponent(auth.id)}&select=*`);return {auth,profile:rows?.[0]||null}}catch{return null}}
+function randInt(max){return Math.floor(Math.random()*max)}
+function pickLength(){const r=Math.random();let c=0;for(const x of ROLL_LENGTHS){c+=x.p;if(r<c)return x.n}return 6}
+function pickLetter(){return String.fromCharCode(65+randInt(26))}
+function pickMutation(){const r=Math.random();let c=0;for(const x of MUTS){c+=x.p;if(r<c)return x.name}return 'normal'}
+function wordSet(n){return n===2?WORDS2:n===3?WORDS3:n===4?WORDS4:n===5?WORDS5:n===6?WORDS6:null}
+function isWord(s){return !!wordSet(s.length)?.has(s.toLowerCase())}
+function patterns(letters){const s=letters.join('').toLowerCase();const hits=[];for(let n=2;n<=Math.min(6,s.length);n++){const set=wordSet(n);if(set&&set.has(s)){hits.push(`${n.toUpperCase()} LETTER WORD`);}}
+if(s.length>=2&&isWord(s.slice(0,2))&&s.length>=4&&isWord(s.slice(2,4)))hits.push('DOUBLE WORD');
+if(s.length>=6&&isWord(s.slice(0,3))&&isWord(s.slice(3,6))&&s.slice(0,3)===s.slice(3,6).split('').reverse().join(''))hits.push('WORD MIRROR');
+for(let i=0;i<s.length-2;i++){if(isWord(s.slice(i,i+2))&&isWord(s.slice(i+2,i+4))){hits.push('WORD CHAIN');break}}
+if(/[aeiou]{2}/.test(s))hits.push('VOWEL PAIR'); if(/[^aeiou]{4}/.test(s))hits.push('CONSONANT RUN'); return [...new Set(hits)]}
+function mutationBadges(ms){const names=new Set(ms.filter(x=>x!=='normal').map(x=>x));const hits=[];for(const n of ['uncommon','rare','neon','epic','mythic','rainbow','catastrophic'])if(names.has(n))hits.push(n.toUpperCase()+' MUTATION');const count=ms.filter(x=>x!=='normal').length;if(count>=2)hits.push('DOUBLE MUTATION');if(count>=3)hits.push('MUTATION RAIN');return hits}
+function calcPoints(rarity,letters,mutations,badgePoints){let base={Common:10,Uncommon:20,Rare:35,Epic:60,Legendary:100,Mythic:250,Rainbow:1000,Catastrophic:5000}[rarity]||10;const mut={uncommon:1,rare:2,neon:4,epic:7,mythic:15,rainbow:40,catastrophic:100,normal:0};base+=mutations.reduce((a,m)=>a+(mut[m]||0),0);base+=badgePoints;return Math.round(base)}
+function rarityFromPoints(points){if(points>=5000)return'Catastrophic';if(points>=1000)return'Rainbow';if(points>=250)return'Mythic';if(points>=100)return'Legendary';if(points>=60)return'Epic';if(points>=35)return'Rare';if(points>=20)return'Uncommon';return'Common'}
+async function awardBadges(env,userId,names){if(!names.length)return[];const rows=await sb(env,`/rest/v1/badges?name=in.(${names.map(n=>encodeURIComponent('"'+n+'"')).join(',')})&select=id,name,points,rarity`);const newRows=[];for(const b of rows||[]){const exists=await sb(env,`/rest/v1/user_badges?user_id=eq.${userId}&badge_id=eq.${b.id}&select=badge_id`);if(!exists?.length){await sb(env,'/rest/v1/user_badges',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({user_id:userId,badge_id:b.id})});newRows.push(b)}}return newRows}
+async function register(request,env){const {username,password}=await request.json();const u=String(username||'').trim();if(!USERNAME_RE.test(u))return json({error:'Username must be 3–20 characters using letters, numbers, _ or -.'},400);if(String(password||'').length<6)return json({error:'Password must be at least 6 characters.'},400);const exists=await sb(env,`/rest/v1/profiles?username=eq.${encodeURIComponent(u)}&select=id`);if(exists?.length)return json({error:'That username is already taken.'},409);const created=await sb(env,'/auth/v1/admin/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:internalEmail(u),password,email_confirm:true,user_metadata:{username:u}})});const logged=await sb(env,'/auth/v1/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:internalEmail(u),password})});const profile=(await sb(env,`/rest/v1/profiles?id=eq.${created.id}&select=*`))[0];return new Response(JSON.stringify({user:profile}),{status:201,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Credentials':'true','Set-Cookie':sessionCookie(logged.access_token)}})}
+async function login(request,env){const {username,password}=await request.json();const u=String(username||'').trim();if(!USERNAME_RE.test(u)||!password)return json({error:'Invalid username or password.'},400);try{const logged=await sb(env,'/auth/v1/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:internalEmail(u),password})});const auth=await sb(env,'/auth/v1/user',{headers:{Authorization:`Bearer ${logged.access_token}`}});const profile=(await sb(env,`/rest/v1/profiles?id=eq.${auth.id}&select=*`))[0];return new Response(JSON.stringify({user:profile}),{headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Credentials':'true','Set-Cookie':sessionCookie(logged.access_token)}})}catch{return json({error:'Invalid username or password.'},401)}}
+async function me(request,env){const u=await userFromRequest(request,env);if(!u)return json({user:null});return json({user:u.profile})}
+async function profile(request,env){const u=await userFromRequest(request,env);if(!u)return json({error:'Unauthorized'},401);if(request.method==='PATCH'){const body=await request.json();const bio=String(body.bio??'').slice(0,240);const rows=await sb(env,`/rest/v1/profiles?id=eq.${u.profile.id}`,{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({bio})});return json({user:rows[0]})}const badges=await sb(env,`/rest/v1/user_badges?user_id=eq.${u.profile.id}&select=unlocked_at,badges(name,description,rarity,points)&order=unlocked_at.desc`);return json({user:u.profile,badges:(badges||[]).map(x=>x.badges)})}
+async function history(request,env){const u=await userFromRequest(request,env);if(!u)return json({error:'Unauthorized'},401);const rolls=await sb(env,`/rest/v1/rolls?user_id=eq.${u.profile.id}&select=id,letters,roll_rarity,points,badges,created_at&order=created_at.desc&limit=25`);return json({rolls})}
+async function players(request,env){const rows=await sb(env,'/rest/v1/profiles?select=username,points,rolls,best_roll,best_roll_rarity,created_at&order=points.desc&limit=100');return json({players:rows||[]})}
+async function roll(request,env){const u=await userFromRequest(request,env);if(!u)return json({error:'Unauthorized'},401);const length=pickLength();const letters=Array.from({length},pickLetter);const mutations=letters.map(()=>pickMutation());const rawBadgeNames=[...patterns(letters),...mutationBadges(mutations),`${length===6?'SIX':length===5?'FIVE':length===4?'FOUR':length===3?'THREE':length===2?'TWO':'ONE'} LETTER ROLL`];let preliminary=rarityFromPoints(mutations.reduce((a,m)=>a+({normal:0,uncommon:10,rare:25,neon:50,epic:90,mythic:250,rainbow:1000,catastrophic:5000}[m]||0),0));if(mutations.includes('catastrophic'))preliminary='Catastrophic';else if(mutations.includes('rainbow'))preliminary='Rainbow';else if(mutations.includes('mythic'))preliminary='Mythic';else if(mutations.includes('epic'))preliminary='Epic';const possible=await sb(env,`/rest/v1/badges?name=in.(${rawBadgeNames.map(n=>encodeURIComponent('"'+n+'"')).join(',')})&select=name,points,rarity`);const badgePoints=(possible||[]).reduce((a,b)=>a+Number(b.points||0),0);const pts=calcPoints(preliminary,letters,mutations,badgePoints);const rarity=rarityFromPoints(pts);const awarded=await awardBadges(env,u.profile.id,rawBadgeNames);const finalPoints=calcPoints(rarity,letters,mutations,awarded.reduce((a,b)=>a+Number(b.points||0),0));const rollRow=(await sb(env,'/rest/v1/rolls',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({user_id:u.profile.id,letters:letters.join(''),roll_rarity:rarity,points:finalPoints,mutations, badges:rawBadgeNames,})}))[0];const newRolls=Number(u.profile.rolls||0)+1;const newTotal=Number(u.profile.points||0)+finalPoints;const isBest=!u.profile.best_roll_points||finalPoints>Number(u.profile.best_roll_points);const patch={points:newTotal,rolls:newRolls};if(isBest)Object.assign(patch,{best_roll:letters.join(''),best_roll_points:finalPoints,best_roll_rarity:rarity});const fresh=(await sb(env,`/rest/v1/profiles?id=eq.${u.profile.id}`,{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(patch)}))[0];return json({letters:rollRow.letters.split(''),mutations,roll_rarity:rarity,points:finalPoints,badges:rawBadgeNames,new_badges:awarded.map(b=>b.name),profile:fresh})}
+export default {async fetch(request,env){if(request.method==='OPTIONS')return cors();const url=new URL(request.url);try{if(url.pathname==='/api/health')return json({ok:true,service:'Letter RNG Worker',version:'1.6'});if(url.pathname==='/api/auth/register'&&request.method==='POST')return await register(request,env);if(url.pathname==='/api/auth/login'&&request.method==='POST')return await login(request,env);if(url.pathname==='/api/auth/logout'&&request.method==='POST')return new Response(JSON.stringify({ok:true}),{headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Credentials':'true','Set-Cookie':clearCookie()}});if(url.pathname==='/api/auth/me'&&request.method==='GET')return await me(request,env);if(url.pathname==='/api/roll'&&request.method==='POST')return await roll(request,env);if(url.pathname==='/api/history'&&request.method==='GET')return await history(request,env);if(url.pathname==='/api/profile'&&(request.method==='GET'||request.method==='PATCH'))return await profile(request,env);if(url.pathname==='/api/players'&&request.method==='GET')return await players(request,env);return json({error:'Not found'},404)}catch(e){console.error(e);return json({error:e.message||'Server error'},500)}}}
