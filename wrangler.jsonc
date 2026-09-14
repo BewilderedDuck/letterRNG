@@ -1,8 +1,10 @@
 {
-  "name": "letter-rng-api",
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "letterrng",
   "main": "worker/index.js",
-  "compatibility_date": "2026-09-12",
-  "vars": {
-    "ALLOWED_ORIGIN": "https://bewilderedduck.github.io/letterRNG/"
+  "compatibility_date": "2026-09-14",
+  "workers_dev": true,
+  "secrets": {
+    "required": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]
   }
 }
