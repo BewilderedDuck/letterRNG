@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="letter-rng-version" content="1.8.1">
-<title>Letter RNG</title>
+<title>Letter RNG 1.9.1</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:Arial,Helvetica,sans-serif;background:radial-gradient(circle at top,#27346a,#0d1020 62%);color:#fff;min-height:100vh}
@@ -270,6 +270,14 @@ const BADGES=[
 {id:"vowelpair",name:"VOWEL PAIR",rarity:"uncommon",chance:"Uncommon",points:35,desc:"Two vowels appear next to each other."},
 {id:"consonantrun",name:"CONSONANT RUN",rarity:"rare",chance:"Rare",points:200,desc:"Four or more consonants appear in a row."}
 ];
+const TITLES=[
+  {id:"rainbow_seeker",name:"RAINBOW SEEKER",description:"Get a Rainbow Mutation.",requirement:"Rainbow Mutation"},
+  {id:"point_millionaire",name:"POINT MILLIONAIRE",description:"Reach 100,000 total points.",requirement:"100,000 points"},
+  {id:"crowd_favorite",name:"CROWD FAVORITE",description:"Get 10 likes on one post.",requirement:"10 likes on one post"},
+  {id:"mutation_master",name:"MUTATION MASTER",description:"Get a Catastrophic Mutation.",requirement:"Catastrophic Mutation"}
+];
+const TITLE_BY_ID=Object.fromEntries(TITLES.map(t=>[t.id,t]));
+
 const twoWords=new Set(["am","an","as","at","be","by","do","go","he","if","in","is","it","me","my","no","of","oh","on","or","so","to","up","us","we","ax","ex","ox"]);
 const threeWords=new Set(["ace","act","add","age","air","all","and","ant","any","ape","arm","art","ate","bad","bag","ban","bar","bat","bed","bee","bet","big","bit","box","boy","bud","bus","buy","can","car","cat","cow","cry","cup","cut","day","did","dog","dot","dry","ear","eat","egg","end","eye","far","fat","few","fig","fin","fit","fox","fun","get","god","got","hat","hen","her","him","his","hot","how","ice","ink","jam","jar","job","joy","key","kid","leg","let","lie","lip","log","lot","low","man","map","may","men","mix","mom","mud","net","new","nod","not","now","nut","oak","off","oil","old","one","out","owl","own","pan","pay","pen","pet","pie","pig","pin","pop","pot","red","run","sad","sea","see","set","she","sit","six","sky","son","sun","tap","tea","ten","the","tie","tin","top","toy","try","two","use","van","war","way","web","wet","win","won","yes","you","zoo"]);
 const fourWords=new Set(["able","acid","also","area","away","baby","back","ball","bank","base","bear","beat","best","blue","boat","book","cake","call","calm","came","camp","card","care","city","club","cold","come","cool","door","down","draw","drop","each","easy","edge","else","even","ever","face","fact","fair","fall","farm","fast","fear","feel","file","fill","find","fire","fish","five","food","foot","free","from","game","gave","girl","give","glad","gold","good","hand","hard","head","help","here","high","home","hope","idea","into","jump","just","keep","kind","king","knew","know","lake","land","last","late","lead","life","like","line","list","long","look","made","make","many","mark","mean","meet","mile","mind","more","most","move","name","near","need","next","nice","open","over","page","pair","part","path","play","race","read","real","road","room","same","save","ship","shop","show","side","snow","some","song","soon","star","stay","step","stop","take","talk","team","tell","than","that","them","then","they","this","time","tiny","tree","true","turn","used","very","walk","wall","want","warm","wave","well","went","were","what","when","will","wind","wish","with","word","work","year","your"]);
