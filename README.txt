@@ -1,13 +1,12 @@
 # Letter RNG
 
-Open `index.html` in a modern browser. Or go  bewilderedduck.github.io/letterRNG/
+Go to bewilderedduck.github.io/letterRNG/ to play!
 
 New:
-- Local username/password account system
+- Online username/password account system
 - No email or verification required
-- Each browser stores its accounts with localStorage
+- Progress is stored in the server
+- RNG system runs in the server
 - Points awarded according to badge rarity
 - Slow letter reveal for suspense :)
 - Points, rolls, badges and history persist per account
-
-Game has servers now!
