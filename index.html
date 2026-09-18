@@ -341,8 +341,8 @@ async function apiFetch(path, options={}, retry=true){
   const token=sessionStorage.getItem(TOKEN_KEY);
   if(token) headers.Authorization=`Bearer ${token}`;
   let res;
-  try{res=await fetch(API_BASE+path,{...options,headers});}
-  catch(err){throw new Error("Failed to fetch. Check that the Cloudflare Worker is deployed and that the Worker URL is correct.");}
+  try{res=await fetch(API_BASE+path,{...options,headers,cache:'no-store'});}
+  catch(err){throw new Error(`Network error contacting Letter RNG server: ${err?.message||err}. Worker: ${API_BASE}`);}
   let data={}; try{data=await res.json()}catch{}
   if(res.status===401 && retry){
     const refresh=sessionStorage.getItem(REFRESH_KEY);
@@ -453,7 +453,29 @@ function updateStats(){$('points').textContent=Number(state.points||0).toLocaleS
 function esc(s){return String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c])}
 function timeAgo(iso){const t=Date.now()-new Date(iso).getTime(),m=Math.floor(t/60000);if(m<1)return'just now';if(m<60)return m+'m ago';const h=Math.floor(m/60);if(h<24)return h+'h ago';const d=Math.floor(h/24);return d+'d ago'}
 function renderShareRolls(){const sel=$('shareRollSelect');if(!sel)return;const items=state?.history||[];sel.innerHTML=items.length?items.map((x,i)=>{const e=EFFECT_BY_ID[x.effect_id];return `<option value="${x.id}">${esc(x.letters)} — ${String(x.roll_rarity||'COMMON').toUpperCase()} • +${Number(x.points||0).toLocaleString()}${e?` • ${e.name}`:''}${i===0?' (recent)':''}</option>`}).join(''):'<option value="">No rolls yet</option>';}
-async function loadCommunity(){try{const [feed,fr]=await Promise.all([GameAPI.feed(),GameAPI.friends()]);renderFeed(feed.posts||[]);renderFriendsData(fr);renderShareRolls()}catch(e){$('feed').innerHTML=`<div class="empty">${esc(e.message)}</div>`}}
+async function checkServer(){
+  try{const h=await fetch(API_BASE+'/api/health',{method:'GET',cache:'no-store'});if(!h.ok)throw new Error(`Worker health returned ${h.status}`);return true}catch(e){return false}
+}
+async function loadCommunity(){
+  const feedEl=$('feed');
+  if(feedEl&&!feedEl.dataset.loaded)feedEl.innerHTML='<div class="empty">Loading community feed...</div>';
+  const results=await Promise.allSettled([GameAPI.feed(),GameAPI.friends()]);
+  const feedResult=results[0],friendsResult=results[1];
+  if(feedResult.status==='fulfilled'){
+    renderFeed(feedResult.value.posts||[]);
+    if(feedEl)feedEl.dataset.loaded='1';
+  }else if(feedEl){
+    feedEl.innerHTML=`<div class="empty">Community feed could not load: ${esc(feedResult.reason?.message||'Unknown error')}<br><button class="tinybtn" type="button" data-retry-feed>RETRY FEED</button></div>`;
+    feedEl.querySelector('[data-retry-feed]')?.addEventListener('click',loadCommunity);
+  }
+  if(friendsResult.status==='fulfilled'){
+    renderFriendsData(friendsResult.value);
+  }else{
+    const msg=friendsResult.reason?.message||'Unable to load friends.';
+    ['friendsList','friendRequests','inlineFriends','inlineFriendRequests'].forEach(id=>{if($(id))$(id).innerHTML=`<div class="empty">${esc(msg)}</div>`});
+  }
+  renderShareRolls();
+}
 function renderFriendsData(d){const friends=d.friends||[],requests=d.requests||[];const list=friends.length?friends.map(f=>`<div class="friendRow"><div><div class="friendName">👤 ${esc(f.username)}</div><div class="muted">${Number(f.points||0).toLocaleString()} points</div></div><button class="tinybtn dangerbtn" data-remove-friend="${esc(f.username)}">REMOVE</button></div>`).join(''):'<div class="empty">No friends yet.</div>';['friendsList','inlineFriends'].forEach(id=>{if($(id))$(id).innerHTML=list});const req=requests.length?requests.map(r=>`<div class="requestRow"><b>👤 ${esc(r.username)}</b><div class="muted">wants to be your friend</div><div class="requestActions"><button class="tinybtn" data-friend-action="accept" data-friend-user="${esc(r.username)}">ACCEPT</button><button class="tinybtn dangerbtn" data-friend-action="decline" data-friend-user="${esc(r.username)}">DECLINE</button></div></div>`).join(''):'<div class="empty">No pending requests.</div>';['friendRequests','inlineFriendRequests'].forEach(id=>{if($(id))$(id).innerHTML=req});document.querySelectorAll('[data-friend-action]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await GameAPI.respondFriend(b.dataset.friendUser,b.dataset.friendAction);await loadCommunity()}catch(e){alert(e.message)}finally{b.disabled=false}});document.querySelectorAll('[data-remove-friend]').forEach(b=>b.onclick=async()=>{if(!confirm('Remove this friend?'))return;b.disabled=true;try{await GameAPI.removeFriend(b.dataset.removeFriend);await loadCommunity()}catch(e){alert(e.message)}finally{b.disabled=false}})}
 function renderFeed(posts){const el=$('feed');if(!posts.length){el.innerHTML='<div class="empty">No posts yet. Be the first to share a lucky roll!</div>';return}el.innerHTML=posts.map(p=>{const my=p.viewer_reaction||'';const comments=p.comments||[];return `<div class="post" data-post="${p.id}"><div class="postHead"><div class="postAuthor">👤 ${esc(p.username)}</div><div class="postDate">${timeAgo(p.created_at)}</div></div>${p.caption?`<div class="postCaption">${esc(p.caption)}</div>`:''}<div class="sharedRoll"><div class="sharedLetters">${esc(p.letters)}</div><div class="sharedMeta"><span class="pill">${esc(p.roll_rarity)}</span> &nbsp; +${Number(p.points||0).toLocaleString()} points${EFFECT_BY_ID[p.effect_id]?` &nbsp; <span class="effect-history">✨ ${esc(EFFECT_BY_ID[p.effect_id].name)} ${EFFECT_BY_ID[p.effect_id].multiplier.toFixed(2)}×</span>`:''}</div></div><div class="postActions"><button class="postAction ${my==='like'?'active':''}" data-react="like">👍 ${p.likes||0}</button><button class="postAction ${my==='dislike'?'active':''}" data-react="dislike">👎 ${p.dislikes||0}</button><button class="postAction" data-comment-toggle>💬 ${p.comment_count||comments.length||0}</button></div><div class="comments"><div data-comments>${comments.length?comments.map(c=>`<div class="comment"><b>${esc(c.username)}</b> ${esc(c.content)}</div>`).join(''):'<div class="muted">No comments yet.</div>'}</div><div style="display:flex;gap:7px;margin-top:8px"><input data-comment-input maxlength="240" placeholder="Write a comment..." style="flex:1;padding:9px;border-radius:9px;border:1px solid #394572;background:#0e1327;color:white"><button class="tinybtn" data-comment-send>POST</button></div></div></div>`}).join('');document.querySelectorAll('[data-react]').forEach(b=>b.onclick=async()=>{const post=b.closest('.post');try{const r=await GameAPI.reactPost(post.dataset.post,b.dataset.react);await loadCommunity()}catch(e){alert(e.message)}});document.querySelectorAll('[data-comment-send]').forEach(b=>b.onclick=async()=>{const post=b.closest('.post'),input=post.querySelector('[data-comment-input]');const content=input.value.trim();if(!content)return;try{await GameAPI.addComment(post.dataset.post,content);input.value='';await loadCommunity()}catch(e){alert(e.message)}})}
 $('sharePostBtn').onclick=async()=>{const rollId=$('shareRollSelect').value,caption=$('shareCaption').value.trim();if(!rollId){$('sharePostMsg').textContent='You need a roll to share.';return}$('sharePostBtn').disabled=true;$('sharePostMsg').textContent='Sharing...';try{await GameAPI.sharePost(rollId,caption);$('shareCaption').value='';$('sharePostMsg').textContent='Roll shared!';await loadCommunity()}catch(e){$('sharePostMsg').textContent=e.message}finally{$('sharePostBtn').disabled=false}};
