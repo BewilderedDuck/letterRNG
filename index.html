@@ -337,9 +337,12 @@ const TOKEN_KEY="letter_rng_access_token";
 const REFRESH_KEY="letter_rng_refresh_token";
 
 async function apiFetch(path, options={}, retry=true){
-  const headers={"Content-Type":"application/json",...(options.headers||{})};
+  const headers={...(options.headers||{})};
+  const hasBody=options.body!==undefined && options.body!==null;
+  if(hasBody && !headers["Content-Type"]) headers["Content-Type"]="application/json";
+  const publicFeed=(path==="/api/posts" && (!options.method || options.method.toUpperCase()==="GET"));
   const token=sessionStorage.getItem(TOKEN_KEY);
-  if(token) headers.Authorization=`Bearer ${token}`;
+  if(token && !publicFeed) headers.Authorization=`Bearer ${token}`;
   let res;
   try{res=await fetch(API_BASE+path,{...options,headers,cache:'no-store'});}
   catch(err){throw new Error(`Network error contacting Letter RNG server: ${err?.message||err}. Worker: ${API_BASE}`);}
